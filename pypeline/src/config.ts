@@ -2,43 +2,43 @@ import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-// ── Resolução dinâmica de caminhos ─────────────────────────────────────────
+// ── Resolução de caminhos em runtime ──────────────────────────────────────
+//
+// IMPORTANTE: todos os caminhos são resolvidos a partir de process.cwd()
+// (o diretório onde o usuário executa o comando sf), NÃO a partir do
+// diretório de instalação do plugin.
+//
+// Isso permite que o plugin seja publicado no npm e instalado em qualquer
+// máquina sem depender de uma estrutura de pastas específica como
+// 'workspace_bash'. O usuário simplesmente executa o comando dentro do
+// diretório do seu projeto git Salesforce.
 
-export function findProjectDir(marker = 'workspace_bash'): string {
-  const current = path.dirname(new URL(import.meta.url).pathname);
-  const parts = current.split(path.sep);
-  for (let i = parts.length; i > 0; i--) {
-    const candidate = parts.slice(0, i).join(path.sep);
-    if (path.basename(candidate) === marker) return candidate;
-  }
-  throw new Error(
-    `Pasta raiz '${marker}' não encontrada na hierarquia de diretórios.\n` +
-    `Verifique se os scripts estão dentro de '${marker}' ou ajuste o marker em config.ts.`
-  );
-}
+// Nome do repositório local Salesforce (pasta irmã do cwd ou configurável)
+const SF_REPO_NAME = process.env['PYPELINE_SF_REPO'] ?? 'sforce-sfdc-bvsa-organization';
 
-export const SCRIPT_DIR  = path.dirname(new URL(import.meta.url).pathname);
-export const PROJECT_DIR = findProjectDir('workspace_bash');
-export const LOCAL_DIR   = path.join(PROJECT_DIR, 'sforce-sfdc-bvsa-organization');
+// Diretório de trabalho do usuário no momento da execução
+export const PROJECT_DIR  = (): string => process.cwd();
+export const LOCAL_DIR    = (): string => path.join(process.cwd(), SF_REPO_NAME);
+export const SCRIPT_DIR   = path.dirname(new URL(import.meta.url).pathname);
 
 // ── Nomes e pastas ─────────────────────────────────────────────────────────
 
 export const PROJECT_NAME = 'build_deploy';
-export const BRANCH       = 'release-v4.0.0';
+export const BRANCH       = process.env['PYPELINE_BRANCH'] ?? 'release-v4.0.0';
 
-export const BUILD_DIR  = path.join(PROJECT_DIR, PROJECT_NAME);
-export const SOURCE_DIR = path.join(BUILD_DIR, 'force-app', 'main', 'default');
+export const BUILD_DIR  = (): string => path.join(process.cwd(), PROJECT_NAME);
+export const SOURCE_DIR = (): string => path.join(BUILD_DIR(), 'force-app', 'main', 'default');
 
 // ── Arquivos de estado ─────────────────────────────────────────────────────
 
-export const BASELINE_FILE = path.join(PROJECT_DIR, 'baseline.txt');
-export const JOB_ID_FILE   = path.join(PROJECT_DIR, 'prd_job_id.txt');
+export const BASELINE_FILE = (): string => path.join(process.cwd(), 'baseline.txt');
+export const JOB_ID_FILE   = (): string => path.join(process.cwd(), 'prd_job_id.txt');
 
 // ── Logs ───────────────────────────────────────────────────────────────────
 
-export const LOG_PRD          = path.join(PROJECT_DIR, 'deploy_prd_output.log');
-export const LOG_TRAINING     = path.join(PROJECT_DIR, 'deploy_training_output.log');
-export const LOG_QUICK_DEPLOY = path.join(PROJECT_DIR, 'quick_deploy_prd_output.log');
+export const LOG_PRD          = (): string => path.join(process.cwd(), 'deploy_prd_output.log');
+export const LOG_TRAINING     = (): string => path.join(process.cwd(), 'deploy_training_output.log');
+export const LOG_QUICK_DEPLOY = (): string => path.join(process.cwd(), 'quick_deploy_prd_output.log');
 
 // ── Utilitários de arquivo ─────────────────────────────────────────────────
 

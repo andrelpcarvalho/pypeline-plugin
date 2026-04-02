@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
@@ -29,7 +29,6 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
 
   public static readonly flags = {
     'target-org': Flags.string({
-      // char 'o' removido — reservado para target-org nativo do sf CLI (sf-plugin/dash-o)
       summary: messages.getMessage('flags.target-org.summary'),
       default: 'devops',
     }),
@@ -50,6 +49,8 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
 
   public async run(): Promise<PypelineQuickdeployResult> {
     const { flags } = await this.parse(PypelineQuickdeploy);
+    const jobIdFile = JOB_ID_FILE();
+    const logPath   = LOG_QUICK_DEPLOY();
 
     this.log('');
     this.log('╔══════════════════════════════════════════════╗');
@@ -57,15 +58,12 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
     this.log('╚══════════════════════════════════════════════╝');
     this.log('');
 
-    // Resolve Job ID: flag ou arquivo
     let jobId = flags['job-id'];
     if (!jobId) {
-      if (!fileExists(JOB_ID_FILE)) {
-        this.error(
-          'prd_job_id.txt não encontrado. Execute sf pypeline run (ou sf pypeline validate prd) antes.'
-        );
+      if (!fileExists(jobIdFile)) {
+        this.error('prd_job_id.txt não encontrado. Execute sf pypeline run (ou sf pypeline validate prd) antes.');
       }
-      jobId = readFileTrimmed(JOB_ID_FILE);
+      jobId = readFileTrimmed(jobIdFile);
     }
 
     if (!jobId) this.error('Job ID vazio. Nenhum Job ID disponível.');
@@ -85,11 +83,11 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
       const confirmed = await this.confirm({ message: 'Confirma o quick deploy em PRODUÇÃO?' });
       if (!confirmed) {
         this.log('[CANCELADO] Quick deploy não executado.');
-        return { success: false, jobId, logPath: LOG_QUICK_DEPLOY };
+        return { success: false, jobId, logPath };
       }
     }
 
-    unlinkIfExists(LOG_QUICK_DEPLOY);
+    unlinkIfExists(logPath);
     this.log('[INFO] Iniciando quick deploy em PRD...');
 
     const cmd = [
@@ -101,8 +99,8 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
     ];
 
     const exitCode = await new Promise<number>((resolve) => {
-      const proc = spawn('sf', cmd, { stdio: ['inherit', 'pipe', 'pipe'] });
-      const log  = fs.createWriteStream(LOG_QUICK_DEPLOY, { flags: 'a' });
+      const proc: ChildProcess = spawn('sf', cmd, { stdio: ['inherit', 'pipe', 'pipe'] });
+      const log  = fs.createWriteStream(logPath, { flags: 'a' });
 
       const handle = (chunk: Buffer, isErr = false): void => {
         const text = chunk.toString();
@@ -110,34 +108,34 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
         log.write(text);
       };
 
-      proc.stdout?.on('data', (c: Buffer) => handle(c));
-      proc.stderr?.on('data', (c: Buffer) => handle(c, true));
-      proc.on('close', (code) => { log.close(); resolve(code ?? 1); });
+      if (proc.stdout) proc.stdout.on('data', (c: Buffer) => handle(c));
+      if (proc.stderr) proc.stderr.on('data', (c: Buffer) => handle(c, true));
+      proc.on('close', (code: number | null) => { log.close(); resolve(code ?? 1); });
     });
 
     this.log('');
 
     if (exitCode === 0) {
-      const logContent = fs.readFileSync(LOG_QUICK_DEPLOY, 'utf8');
+      const logContent = fs.readFileSync(logPath, 'utf8');
       if (ERROR_PATTERN.test(logContent)) {
         this.log('╔══════════════════════════════════════════════╗');
         this.log('║  [AVISO] Deploy concluído com warnings.      ║');
-        this.log('║  Verifique quick_deploy_prd_output.log       ║');
+        this.log(`║  Verifique : ${logPath.split('/').pop()?.padEnd(32) ?? ''}║`);
         this.log('╚══════════════════════════════════════════════╝');
       } else {
-        unlinkIfExists(JOB_ID_FILE);
+        unlinkIfExists(jobIdFile);
         this.log('╔══════════════════════════════════════════════╗');
         this.log('║  QUICK DEPLOY EM PRD CONCLUÍDO COM SUCESSO   ║');
         this.log('║  prd_job_id.txt removido (evita reuso)       ║');
         this.log('╚══════════════════════════════════════════════╝');
       }
-      return { success: true, jobId, logPath: LOG_QUICK_DEPLOY };
+      return { success: true, jobId, logPath };
     }
 
     this.log('╔══════════════════════════════════════════════╗');
     this.log('║  [ERRO] Quick deploy falhou.                 ║');
     this.log(`║  Exit code : ${String(exitCode).padEnd(32)}║`);
-    this.log('║  Verifique : quick_deploy_prd_output.log     ║');
+    this.log(`║  Verifique : ${logPath.split('/').pop()?.padEnd(32) ?? ''}║`);
     this.log('╚══════════════════════════════════════════════╝');
     this.error(`Quick deploy falhou com exit code ${exitCode}.`);
   }

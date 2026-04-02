@@ -7,6 +7,7 @@ import {
   JOB_ID_FILE,
   LOG_PRD,
   LOG_TRAINING,
+  SCRIPT_DIR,
   fileExists,
   readFileTrimmed,
   writeFile,
@@ -16,8 +17,6 @@ Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('pypeline', 'pypeline.run');
 
 const ERROR_PATTERN = /error|failed|exception|deploy failed/i;
-
-// ── Helpers ────────────────────────────────────────────────────────────────
 
 function logHasErrors(logPath: string): boolean {
   if (!fs.existsSync(logPath)) return false;
@@ -77,12 +76,20 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
   public async run(): Promise<PypelineRunResult> {
     const { flags } = await this.parse(PypelineRun);
 
-    if (!fileExists(BASELINE_FILE)) {
+    // Resolve todos os caminhos uma única vez no início do run
+    const baselineFile = BASELINE_FILE();
+    const jobIdFile    = JOB_ID_FILE();
+    const logPrd       = LOG_PRD();
+    const logTraining  = LOG_TRAINING();
+
+    if (!fileExists(baselineFile)) {
       this.error('baseline.txt não encontrado. Abortando.');
     }
 
-    const baselineBackup = readFileTrimmed(BASELINE_FILE);
+    const baselineBackup = readFileTrimmed(baselineFile);
     this.log(`[INFO] Baseline salvo para rollback: ${baselineBackup}`);
+    this.log(`[INFO] Diretório de trabalho: ${process.cwd()}`);
+    this.log(`[INFO] Script dir: ${SCRIPT_DIR}`);
 
     const rollback = (etapa: string): never => {
       this.log('');
@@ -90,7 +97,7 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
       this.log(`║  ERRO NA ETAPA: ${etapa.padEnd(28)}║`);
       this.log(`║  Restaurando baseline → ${baselineBackup.slice(0, 20)}...  ║`);
       this.log('╚══════════════════════════════════════════════╝');
-      writeFile(BASELINE_FILE, baselineBackup + '\n');
+      writeFile(baselineFile, baselineBackup + '\n');
       this.log('[INFO] Rollback concluído. Nenhuma alteração foi promovida.');
       this.error(`Pipeline abortado na etapa: ${etapa}`);
     };
@@ -98,7 +105,11 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     // ── ETAPA 1: Build ───────────────────────────────────────────────────
     this.log('');
     this.log('==> [1/4] Executando build...');
-    const buildArgs = ['pypeline', 'build', ...(flags['branch'] ? ['--branch', flags['branch']] : []), ...(flags['dry-run'] ? ['--dry-run'] : [])];
+    const buildArgs = [
+      'pypeline', 'build',
+      ...(flags['branch'] ? ['--branch', flags['branch']] : []),
+      ...(flags['dry-run'] ? ['--dry-run'] : []),
+    ];
     if ((await runSubcommand(buildArgs)) !== 0) rollback('pypeline build');
 
     // ── ETAPA 2: package.xml ─────────────────────────────────────────────
@@ -111,7 +122,7 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     if (!flags['skip-training']) {
       this.log('');
       this.log('==> [3/4] Disparando deploy em Training (paralelo ao PRD)...');
-      trainingPromise = runSubcommand(['pypeline', 'deploy', 'training', '--target-org', flags['training-org']]);
+      trainingPromise = runSubcommand(['pypeline', 'deploy', 'training', '--target-org', flags['training-org'] ?? 'treino']);
       this.log('[INFO] Training rodando em background...');
     } else {
       this.log('==> [3/4] Training ignorado (--skip-training).');
@@ -120,17 +131,15 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     // ── ETAPA 4: Validação PRD (síncrono) ────────────────────────────────
     this.log('');
     this.log('==> [4/4] Validação em PRD...');
-    const prdExit = await runSubcommand(['pypeline', 'validate', 'prd', '--target-org', flags['prd-org']]);
+    const prdExit = await runSubcommand(['pypeline', 'validate', 'prd', '--target-org', flags['prd-org'] ?? 'devops']);
 
-    // Aguarda training antes de avaliar resultados
     const trainingExit = trainingPromise ? await trainingPromise : null;
 
     if (prdExit !== 0) rollback('pypeline validate prd (exit code diferente de 0)');
-    if (logHasErrors(LOG_PRD)) {
+    if (logHasErrors(logPrd)) {
       this.log('[ERRO] Erros detectados no deploy_prd_output.log:');
-      const lines = fs.readFileSync(LOG_PRD, 'utf8').split('\n');
       let shown = 0;
-      for (const l of lines) {
+      for (const l of fs.readFileSync(logPrd, 'utf8').split('\n')) {
         if (ERROR_PATTERN.test(l)) { this.log(`  ${l}`); if (++shown >= 20) break; }
       }
       rollback('validate PRD (erros encontrados no log)');
@@ -138,27 +147,24 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
 
     this.log('[OK] Validação em PRD concluída sem erros.');
 
-    // ── Resultado do Training ────────────────────────────────────────────
     this.log('');
     if (trainingExit === null) {
       this.log('[INFO] Training não executado nesta run.');
     } else if (trainingExit !== 0) {
       this.warn(`Training terminou com exit code ${trainingExit} — verifique deploy_training_output.log`);
-    } else if (logHasErrors(LOG_TRAINING)) {
+    } else if (logHasErrors(logTraining)) {
       this.warn('Training concluído mas com erros no log — verifique deploy_training_output.log');
     } else {
       this.log('[OK] Deploy em Training concluído sem erros.');
     }
 
-    // ── Atualiza baseline após PRD passar ───────────────────────────────
-    const novoBaseline = readFileTrimmed(BASELINE_FILE);
-    writeFile(BASELINE_FILE, novoBaseline + '\n');
+    const novoBaseline = readFileTrimmed(baselineFile);
+    writeFile(baselineFile, novoBaseline + '\n');
     this.log(`[INFO] baseline.txt atualizado para: ${novoBaseline}`);
 
-    // ── Job ID para quick deploy ─────────────────────────────────────────
-    const jobId = extractJobId(LOG_PRD);
+    const jobId = extractJobId(logPrd);
     if (jobId) {
-      writeFile(JOB_ID_FILE, jobId + '\n');
+      writeFile(jobIdFile, jobId + '\n');
       this.log('');
       this.log('╔══════════════════════════════════════════════════════════════╗');
       this.log('║  PIPELINE CONCLUÍDO COM SUCESSO                              ║');

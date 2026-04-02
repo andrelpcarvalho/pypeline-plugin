@@ -2,8 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { LOCAL_DIR } from './config.js';
 
-// ── Caracteres especiais (octal → Unicode) ─────────────────────────────────
-
 const SPECIAL_CHARS: Record<string, string> = {
   '\\\\303\\\\247': 'ç',
   '\\\\303\\\\272': 'ú',
@@ -25,11 +23,8 @@ function replaceSpecialChars(input: string): string {
 }
 
 export function cleanFilename(input: string): string {
-  const replaced = replaceSpecialChars(input);
-  return replaced.replace(/^"|"$/g, '');
+  return replaceSpecialChars(input).replace(/^"|"$/g, '');
 }
-
-// ── Funções de cópia ───────────────────────────────────────────────────────
 
 function copyRecursive(src: string, dst: string): void {
   fs.cpSync(src, dst, { recursive: true, force: true });
@@ -40,32 +35,35 @@ function ensureDir(dirPath: string): void {
 }
 
 function copyClassMeta(cleanedFile: string, buildDir: string): void {
-  const src = path.join(LOCAL_DIR, cleanedFile);
+  const localDir = LOCAL_DIR();
+  const src = path.join(localDir, cleanedFile);
   const dst = path.join(buildDir, cleanedFile);
   ensureDir(path.dirname(dst));
   fs.copyFileSync(src, dst);
   const meta = cleanedFile + '-meta.xml';
-  fs.copyFileSync(path.join(LOCAL_DIR, meta), path.join(buildDir, meta));
+  fs.copyFileSync(path.join(localDir, meta), path.join(buildDir, meta));
 }
 
 function copyExtensionFilePath(file: string, buildDir: string): void {
+  const localDir = LOCAL_DIR();
   const p       = path.parse(file);
   const upFile  = path.dirname(p.dir);
   const destino = path.dirname(upFile);
   ensureDir(path.join(buildDir, destino));
-  copyRecursive(path.join(LOCAL_DIR, upFile), path.join(buildDir, upFile));
+  copyRecursive(path.join(localDir, upFile), path.join(buildDir, upFile));
   const metaName = `${path.basename(upFile)}.site-meta.xml`;
-  const metaSrc  = path.join(LOCAL_DIR, destino, metaName);
+  const metaSrc  = path.join(localDir, destino, metaName);
   if (fs.existsSync(metaSrc)) {
     fs.copyFileSync(metaSrc, path.join(buildDir, destino, metaName));
   }
 }
 
 function copyComponentsPath(file: string, buildDir: string): void {
+  const localDir = LOCAL_DIR();
   const dirFile = path.dirname(file);
   const upFile  = path.dirname(dirFile);
   ensureDir(path.join(buildDir, upFile));
-  copyRecursive(path.join(LOCAL_DIR, dirFile), path.join(buildDir, dirFile));
+  copyRecursive(path.join(localDir, dirFile), path.join(buildDir, dirFile));
 }
 
 export function copyFile(file: string, buildDir: string): void {
@@ -77,7 +75,7 @@ export function copyFile(file: string, buildDir: string): void {
   } else if (cleaned.includes('/experiences/')) {
     copyExtensionFilePath(cleaned, buildDir);
   } else {
-    const src = path.join(LOCAL_DIR, cleaned);
+    const src = path.join(LOCAL_DIR(), cleaned);
     const dst = path.join(buildDir, cleaned);
     ensureDir(path.dirname(dst));
     fs.copyFileSync(src, dst);

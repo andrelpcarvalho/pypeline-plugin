@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
@@ -19,7 +19,6 @@ export default class PypelineDeployTraining extends SfCommand<PypelineDeployTrai
 
   public static readonly flags = {
     'target-org': Flags.string({
-      // char 'o' removido — reservado para target-org nativo (sf-plugin/dash-o)
       summary: messages.getMessage('flags.target-org.summary'),
       default: 'treino',
     }),
@@ -32,13 +31,15 @@ export default class PypelineDeployTraining extends SfCommand<PypelineDeployTrai
 
   public async run(): Promise<PypelineDeployTrainingResult> {
     const { flags } = await this.parse(PypelineDeployTraining);
+    const logPath   = LOG_TRAINING();
+    const sourceDir = SOURCE_DIR();
 
-    unlinkIfExists(LOG_TRAINING);
+    unlinkIfExists(logPath);
     this.log('Iniciando deploy em Training...');
 
     const cmd = [
       'project', 'deploy', 'start',
-      '--source-dir', SOURCE_DIR,
+      '--source-dir', sourceDir,
       '--target-org',  flags['target-org'] ?? 'treino',
       '--test-level',  'RunLocalTests',
       '-w',            String(flags['wait'] ?? 240),
@@ -47,20 +48,26 @@ export default class PypelineDeployTraining extends SfCommand<PypelineDeployTrai
     ];
 
     const exitCode = await new Promise<number>((resolve) => {
-      const proc = spawn('sf', cmd, { stdio: ['inherit', 'pipe', 'pipe'] });
-      const log  = fs.createWriteStream(LOG_TRAINING, { flags: 'a' });
+      const proc: ChildProcess = spawn('sf', cmd, { stdio: ['inherit', 'pipe', 'pipe'] });
+      const log = fs.createWriteStream(logPath, { flags: 'a' });
 
-      proc.stdout?.on('data', (chunk: Buffer) => {
-        const text = chunk.toString();
-        process.stdout.write(text);
-        log.write(text);
-      });
-      proc.stderr?.on('data', (chunk: Buffer) => {
-        const text = chunk.toString();
-        process.stderr.write(text);
-        log.write(text);
-      });
-      proc.on('close', (code) => {
+      if (proc.stdout) {
+        proc.stdout.on('data', (chunk: Buffer) => {
+          const text = chunk.toString();
+          process.stdout.write(text);
+          log.write(text);
+        });
+      }
+
+      if (proc.stderr) {
+        proc.stderr.on('data', (chunk: Buffer) => {
+          const text = chunk.toString();
+          process.stderr.write(text);
+          log.write(text);
+        });
+      }
+
+      proc.on('close', (code: number | null) => {
         log.close();
         resolve(code ?? 1);
       });
@@ -71,6 +78,6 @@ export default class PypelineDeployTraining extends SfCommand<PypelineDeployTrai
     }
 
     this.log('Deploy em Training concluído com sucesso.');
-    return { success: true, logPath: LOG_TRAINING };
+    return { success: true, logPath };
   }
 }

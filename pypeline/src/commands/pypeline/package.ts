@@ -17,10 +17,11 @@ export default class PypelinePackage extends SfCommand<PypelinePackageResult> {
   public static readonly examples = messages.getMessages('examples');
 
   public async run(): Promise<PypelinePackageResult> {
+    const buildDir = BUILD_DIR();
     this.log('Gerando package.xml...');
 
     const exitCode = await new Promise<number>((resolve) => {
-      const proc = spawn('sf', ['project', 'generate', 'manifest', '--source-dir', BUILD_DIR], {
+      const proc = spawn('sf', ['project', 'generate', 'manifest', '--source-dir', buildDir], {
         stdio: 'inherit',
       });
       proc.on('close', (code) => resolve(code ?? 1));
@@ -31,6 +32,6 @@ export default class PypelinePackage extends SfCommand<PypelinePackageResult> {
     }
 
     this.log('package.xml gerado com sucesso.');
-    return { success: true, buildDir: BUILD_DIR };
+    return { success: true, buildDir };
   }
 }

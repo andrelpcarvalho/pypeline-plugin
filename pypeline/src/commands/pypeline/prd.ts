@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
@@ -28,7 +28,6 @@ export default class PypelineValidatePrd extends SfCommand<PypelineValidatePrdRe
 
   public static readonly flags = {
     'target-org': Flags.string({
-      // char 'o' removido — reservado para target-org nativo (sf-plugin/dash-o)
       summary: messages.getMessage('flags.target-org.summary'),
       default: 'devops',
     }),
@@ -41,15 +40,18 @@ export default class PypelineValidatePrd extends SfCommand<PypelineValidatePrdRe
 
   public async run(): Promise<PypelineValidatePrdResult> {
     const { flags } = await this.parse(PypelineValidatePrd);
+    const logPath   = LOG_PRD();
+    const jobIdFile = JOB_ID_FILE();
+    const sourceDir = SOURCE_DIR();
 
-    unlinkIfExists(LOG_PRD);
-    unlinkIfExists(JOB_ID_FILE);
+    unlinkIfExists(logPath);
+    unlinkIfExists(jobIdFile);
 
     this.log('Iniciando validação em PRD...');
 
     const cmd = [
       'project', 'deploy', 'validate',
-      '--source-dir', SOURCE_DIR,
+      '--source-dir', sourceDir,
       '--target-org',  flags['target-org'] ?? 'devops',
       '-w',            String(flags['wait'] ?? 240),
       '--verbose',
@@ -58,14 +60,13 @@ export default class PypelineValidatePrd extends SfCommand<PypelineValidatePrdRe
     let jobId: string | null = null;
 
     const exitCode = await new Promise<number>((resolve) => {
-      const proc = spawn('sf', cmd, { stdio: ['inherit', 'pipe', 'pipe'] });
-      const log  = fs.createWriteStream(LOG_PRD, { flags: 'a' });
+      const proc: ChildProcess = spawn('sf', cmd, { stdio: ['inherit', 'pipe', 'pipe'] });
+      const log = fs.createWriteStream(logPath, { flags: 'a' });
 
       const handleChunk = (chunk: Buffer, isErr = false): void => {
         const text = chunk.toString();
         (isErr ? process.stderr : process.stdout).write(text);
         log.write(text);
-
         if (!jobId) {
           for (const line of text.split('\n')) {
             const match = JOB_ID_REGEX.exec(line);
@@ -74,25 +75,24 @@ export default class PypelineValidatePrd extends SfCommand<PypelineValidatePrdRe
         }
       };
 
-      proc.stdout?.on('data', (c: Buffer) => handleChunk(c));
-      proc.stderr?.on('data', (c: Buffer) => handleChunk(c, true));
-      proc.on('close', (code) => { log.close(); resolve(code ?? 1); });
+      if (proc.stdout) proc.stdout.on('data', (c: Buffer) => handleChunk(c));
+      if (proc.stderr) proc.stderr.on('data', (c: Buffer) => handleChunk(c, true));
+      proc.on('close', (code: number | null) => { log.close(); resolve(code ?? 1); });
     });
 
     if (exitCode !== 0) {
       this.error(`Validate em PRD falhou com exit code ${exitCode}.`);
     }
 
-    // Atribui a uma const tipada para evitar "never" na concatenação
     if (jobId !== null) {
       const safeJobId: string = jobId;
-      writeFile(JOB_ID_FILE, safeJobId + '\n');
+      writeFile(jobIdFile, safeJobId + '\n');
       this.log(`[INFO] Job ID salvo em prd_job_id.txt: ${safeJobId}`);
     } else {
       this.warn('Job ID não encontrado no log. Quick deploy deverá ser feito manualmente.');
     }
 
     this.log('Validação em PRD concluída.');
-    return { success: true, jobId, logPath: LOG_PRD };
+    return { success: true, jobId, logPath };
   }
 }

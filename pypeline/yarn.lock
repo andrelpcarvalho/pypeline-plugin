@@ -2208,7 +2208,7 @@
   dependencies:
     "@types/node" "*"
 
-"@types/node@*", "@types/node@^22.5.5":
+"@types/node@*", "@types/node@^20", "@types/node@^22.5.5":
   version "22.9.0"
   resolved "https://registry.npmjs.org/@types/node/-/node-22.9.0.tgz"
   integrity sha512-vuyHg81vvWA1Z1ELfvLko2c8f34gyA0zaic0+Rllc5lbCnbSyuvb2Oxpm6TAUAC/2xZN3QGqxBNggD1nNR2AfQ==
@@ -2258,7 +2258,7 @@
     "@types/glob" "~7.2.0"
     "@types/node" "*"
 
-"@types/sinon@^10.0.20":
+"@types/sinon@^10.0.20", "@types/sinon@^17.0.3":
   version "10.0.20"
   resolved "https://registry.npmjs.org/@types/sinon/-/sinon-10.0.20.tgz"
   integrity sha512-2APKKruFNCAZgx3daAyACGzWuJ028VVCUDk6o2rw/Z4PXT0ogwdV4KUegW0MwVs0Zu59auPXbbuBJHF12Sx1Eg==
@@ -2860,7 +2860,7 @@ cardinal@^2.1.1:
     ansicolors "~0.3.2"
     redeyed "~2.1.0"
 
-chai@^4.3.10:
+chai@^4.3.10, chai@^4.4.1:
   version "4.3.10"
   resolved "https://registry.npmjs.org/chai/-/chai-4.3.10.tgz"
   integrity sha512-0UXG04VuVbruMUYbJ6JctvH0YnC/4q3/AkT18q4NaITo91CUm0liMS9VqzT9vZhVQ/1eqPanMWjBM+Juhfb/9g==
@@ -6728,6 +6728,18 @@ simple-swizzle@^0.2.2:
   dependencies:
     is-arrayish "^0.3.1"
 
+sinon@^17.0.1, sinon@10.0.0:
+  version "10.0.0"
+  resolved "https://registry.npmjs.org/sinon/-/sinon-10.0.0.tgz"
+  integrity sha512-XAn5DxtGVJBlBWYrcYKEhWCz7FLwZGdyvANRyK06419hyEpdT0dMc5A8Vcxg5SCGHc40CsqoKsc1bt1CbJPfNw==
+  dependencies:
+    "@sinonjs/commons" "^1.8.1"
+    "@sinonjs/fake-timers" "^6.0.1"
+    "@sinonjs/samsam" "^5.3.1"
+    diff "^4.0.2"
+    nise "^4.1.0"
+    supports-color "^7.1.0"
+
 sinon@^17.0.2:
   version "17.0.2"
   resolved "https://registry.npmjs.org/sinon/-/sinon-17.0.2.tgz"
@@ -6739,18 +6751,6 @@ sinon@^17.0.2:
     diff "^5.2.0"
     nise "^5.1.9"
     supports-color "^7"
-
-sinon@10.0.0:
-  version "10.0.0"
-  resolved "https://registry.npmjs.org/sinon/-/sinon-10.0.0.tgz"
-  integrity sha512-XAn5DxtGVJBlBWYrcYKEhWCz7FLwZGdyvANRyK06419hyEpdT0dMc5A8Vcxg5SCGHc40CsqoKsc1bt1CbJPfNw==
-  dependencies:
-    "@sinonjs/commons" "^1.8.1"
-    "@sinonjs/fake-timers" "^6.0.1"
-    "@sinonjs/samsam" "^5.3.1"
-    diff "^4.0.2"
-    nise "^4.1.0"
-    supports-color "^7.1.0"
 
 slash@^3.0.0:
   version "3.0.0"
@@ -7368,7 +7368,7 @@ typedoc@^0.25.12:
     minimatch "^9.0.3"
     shiki "^0.14.7"
 
-"typescript@^4.6.4 || ^5.2.2", typescript@^5.3.3, typescript@>=2.7, typescript@>=4:
+"typescript@^4.6.4 || ^5.2.2", typescript@^5.4.5, typescript@>=2.7, typescript@>=4:
   version "5.3.3"
   resolved "https://registry.npmjs.org/typescript/-/typescript-5.3.3.tgz"
   integrity sha512-pXWcraxM0uxAS+tN0AG/BF2TyqmHO014Z070UsJ+pFvYuRSq8KH8DmWpnbXe0pEPDHXZV3FcAbJkijJ5oNEnWw==

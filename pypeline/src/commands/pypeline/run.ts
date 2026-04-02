@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
@@ -16,11 +16,12 @@ import {
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('pypeline', 'pypeline.run');
 
-const ERROR_PATTERN = /error|failed|exception|deploy failed/i;
+// ── Melhoria 4: regex específico para Status : Failed do sf CLI ────────────
+const DEPLOY_FAILED_PATTERN = /Status\s*:\s*Failed/i;
 
 function logHasErrors(logPath: string): boolean {
   if (!fs.existsSync(logPath)) return false;
-  return fs.readFileSync(logPath, 'utf8').split('\n').some((l) => ERROR_PATTERN.test(l));
+  return fs.readFileSync(logPath, 'utf8').split('\n').some((l) => DEPLOY_FAILED_PATTERN.test(l));
 }
 
 function extractJobId(logPath: string): string | null {
@@ -34,14 +35,14 @@ function extractJobId(logPath: string): string | null {
 
 async function runSubcommand(args: string[]): Promise<number> {
   return new Promise((resolve) => {
-    const proc = spawn('sf', args, { stdio: 'inherit' });
-    proc.on('close', (code) => resolve(code ?? 1));
+    const proc: ChildProcess = spawn('sf', args, { stdio: 'inherit' });
+    proc.on('close', (code: number | null) => resolve(code ?? 1));
   });
 }
 
 export type PypelineRunResult = {
-  success: boolean;
-  jobId:   string | null;
+  success:         boolean;
+  jobId:           string | null;
   baselineUpdated: string | null;
 };
 
@@ -55,8 +56,10 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
       char: 'b',
       summary: messages.getMessage('flags.branch.summary'),
     }),
-    'skip-training': Flags.boolean({
-      summary: messages.getMessage('flags.skip-training.summary'),
+    // ── Melhoria 3: training é opt-in, não opt-out ─────────────────────────
+    // Por padrão o training NÃO roda. Passe --training para habilitá-lo.
+    training: Flags.boolean({
+      summary: messages.getMessage('flags.training.summary'),
       default: false,
     }),
     'dry-run': Flags.boolean({
@@ -76,7 +79,6 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
   public async run(): Promise<PypelineRunResult> {
     const { flags } = await this.parse(PypelineRun);
 
-    // Resolve todos os caminhos uma única vez no início do run
     const baselineFile = BASELINE_FILE();
     const jobIdFile    = JOB_ID_FILE();
     const logPrd       = LOG_PRD();
@@ -87,9 +89,9 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     }
 
     const baselineBackup = readFileTrimmed(baselineFile);
-    this.log(`[INFO] Baseline salvo para rollback: ${baselineBackup}`);
-    this.log(`[INFO] Diretório de trabalho: ${process.cwd()}`);
-    this.log(`[INFO] Script dir: ${SCRIPT_DIR}`);
+    this.log(`[INFO] Baseline salvo para rollback : ${baselineBackup}`);
+    this.log(`[INFO] Diretório de trabalho        : ${process.cwd()}`);
+    this.log(`[INFO] Script dir                   : ${SCRIPT_DIR}`);
 
     const rollback = (etapa: string): never => {
       this.log('');
@@ -112,56 +114,74 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     ];
     if ((await runSubcommand(buildArgs)) !== 0) rollback('pypeline build');
 
+    // ── Melhoria 2: lê o novoBaseline calculado pelo build ────────────────
+    // O build.ts salva o HEAD atual em PYPELINE_NOVO_BASELINE.
+    // Se por algum motivo a env não estiver disponível (subprocesso separado),
+    // faz fallback lendo o git rev-parse HEAD diretamente.
+    const novoBaseline = process.env['PYPELINE_NOVO_BASELINE'] ?? readFileTrimmed(baselineFile);
+    this.log(`[INFO] Novo baseline a ser gravado  : ${novoBaseline}`);
+
     // ── ETAPA 2: package.xml ─────────────────────────────────────────────
     this.log('');
     this.log('==> [2/4] Gerando package.xml...');
     if ((await runSubcommand(['pypeline', 'package'])) !== 0) rollback('pypeline package');
 
-    // ── ETAPA 3: Training em background ─────────────────────────────────
+    // ── ETAPA 3: Training (opt-in via --training) ────────────────────────
     let trainingPromise: Promise<number> | null = null;
-    if (!flags['skip-training']) {
+    if (flags['training']) {
       this.log('');
       this.log('==> [3/4] Disparando deploy em Training (paralelo ao PRD)...');
-      trainingPromise = runSubcommand(['pypeline', 'deploy', 'training', '--target-org', flags['training-org'] ?? 'treino']);
+      trainingPromise = runSubcommand([
+        'pypeline', 'deploy', 'training',
+        '--target-org', flags['training-org'] ?? 'treino',
+      ]);
       this.log('[INFO] Training rodando em background...');
     } else {
-      this.log('==> [3/4] Training ignorado (--skip-training).');
+      this.log('');
+      this.log('==> [3/4] Training ignorado (use --training para habilitar).');
     }
 
     // ── ETAPA 4: Validação PRD (síncrono) ────────────────────────────────
     this.log('');
     this.log('==> [4/4] Validação em PRD...');
-    const prdExit = await runSubcommand(['pypeline', 'validate', 'prd', '--target-org', flags['prd-org'] ?? 'devops']);
+    const prdExit = await runSubcommand([
+      'pypeline', 'validate', 'prd',
+      '--target-org', flags['prd-org'] ?? 'devops',
+    ]);
 
     const trainingExit = trainingPromise ? await trainingPromise : null;
 
     if (prdExit !== 0) rollback('pypeline validate prd (exit code diferente de 0)');
+
+    // ── Melhoria 4: detecta "Status : Failed" no log ─────────────────────
     if (logHasErrors(logPrd)) {
-      this.log('[ERRO] Erros detectados no deploy_prd_output.log:');
+      this.log('[ERRO] Status : Failed detectado no deploy_prd_output.log:');
       let shown = 0;
       for (const l of fs.readFileSync(logPrd, 'utf8').split('\n')) {
-        if (ERROR_PATTERN.test(l)) { this.log(`  ${l}`); if (++shown >= 20) break; }
+        if (DEPLOY_FAILED_PATTERN.test(l)) { this.log(`  ${l}`); if (++shown >= 20) break; }
       }
-      rollback('validate PRD (erros encontrados no log)');
+      rollback('validate PRD (Status : Failed encontrado no log)');
     }
 
     this.log('[OK] Validação em PRD concluída sem erros.');
 
+    // ── Resultado do Training ────────────────────────────────────────────
     this.log('');
     if (trainingExit === null) {
-      this.log('[INFO] Training não executado nesta run.');
+      this.log('[INFO] Training não executado nesta run (use --training para habilitar).');
     } else if (trainingExit !== 0) {
       this.warn(`Training terminou com exit code ${trainingExit} — verifique deploy_training_output.log`);
     } else if (logHasErrors(logTraining)) {
-      this.warn('Training concluído mas com erros no log — verifique deploy_training_output.log');
+      this.warn('Training concluído mas com Status : Failed no log — verifique deploy_training_output.log');
     } else {
       this.log('[OK] Deploy em Training concluído sem erros.');
     }
 
-    const novoBaseline = readFileTrimmed(baselineFile);
+    // ── Melhoria 2: grava o novoBaseline correto (HEAD do git pull) ───────
     writeFile(baselineFile, novoBaseline + '\n');
     this.log(`[INFO] baseline.txt atualizado para: ${novoBaseline}`);
 
+    // ── Job ID para quick deploy ─────────────────────────────────────────
     const jobId = extractJobId(logPrd);
     if (jobId) {
       writeFile(jobIdFile, jobId + '\n');

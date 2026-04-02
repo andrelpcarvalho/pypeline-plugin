@@ -9,11 +9,22 @@ import sinon from 'sinon';
 import PypelineRun from '../../../../src/commands/pypeline/run.js';
 import { FAKE_COMMIT_HASH, FAKE_JOB_ID, assertRejects } from '../../../helpers.js';
 
+// Novo baseline que o build.ts publica via env
+const FAKE_NEW_BASELINE = 'zzz9999aaa0000bbb1111ccc2222ddd3333eee44';
+
 describe('pypeline run', () => {
   let sandbox: sinon.SinonSandbox;
 
-  beforeEach(() => { sandbox = sinon.createSandbox(); });
-  afterEach(() => { sandbox.restore(); });
+  beforeEach(() => {
+    sandbox = sinon.createSandbox();
+    // Simula o env que o build.ts publica com o novoBaseline
+    process.env['PYPELINE_NOVO_BASELINE'] = FAKE_NEW_BASELINE;
+  });
+
+  afterEach(() => {
+    sandbox.restore();
+    delete process.env['PYPELINE_NOVO_BASELINE'];
+  });
 
   function stubPipelineSpawn(exitCodes: {
     build?: number;
@@ -23,7 +34,7 @@ describe('pypeline run', () => {
   } = {}): sinon.SinonStub {
     const codes = { build: 0, package: 0, training: 0, validate: 0, ...exitCodes };
 
-    return sandbox.stub(childProcess, 'spawn').callsFake((_bin: string, args: string[]) => {
+    return sandbox.stub(childProcess, 'spawn').callsFake((_bin: string, args: readonly string[]) => {
       let exitCode = 0;
       if (args.includes('build'))    exitCode = codes.build;
       if (args.includes('package'))  exitCode = codes.package;
@@ -56,6 +67,8 @@ describe('pypeline run', () => {
     sandbox.stub(fs, 'unlinkSync');
   }
 
+  // ── Happy path ─────────────────────────────────────────────────────────
+
   it('deve concluir o pipeline com sucesso quando todas as etapas passam', async () => {
     setupBaseFs();
     stubPipelineSpawn();
@@ -64,12 +77,60 @@ describe('pypeline run', () => {
     expect(result.jobId).to.equal(FAKE_JOB_ID);
   });
 
-  it('deve atualizar baselineUpdated no resultado', async () => {
+  // ── Melhoria 2: baseline deve ser o novoBaseline, não o backup ───────────
+
+  it('deve gravar o novoBaseline calculado pelo build, não o baseline original', async () => {
     setupBaseFs();
     stubPipelineSpawn();
     const result = await PypelineRun.run([]);
-    expect(result.baselineUpdated).to.equal(FAKE_COMMIT_HASH);
+    expect(result.baselineUpdated).to.equal(FAKE_NEW_BASELINE);
+
+    const writeStub = fs.writeFileSync as sinon.SinonStub;
+    const baselineWrite = (writeStub.args as unknown[][]).find(
+      (a) => String(a[0]).includes('baseline')
+    );
+    expect(baselineWrite).to.not.equal(undefined);
+    expect(String(baselineWrite![1])).to.include(FAKE_NEW_BASELINE);
   });
+
+  // ── Melhoria 3: training opt-in ──────────────────────────────────────────
+
+  it('por padrão não deve chamar pypeline deploy training', async () => {
+    setupBaseFs();
+    const spawnStub = stubPipelineSpawn();
+    await PypelineRun.run([]);
+    const trainingCall = (spawnStub.args as unknown[][]).find(
+      (a) => Array.isArray(a[1]) && (a[1] as string[]).includes('training')
+    );
+    expect(trainingCall).to.equal(undefined);
+  });
+
+  it('com --training deve chamar pypeline deploy training', async () => {
+    setupBaseFs();
+    const spawnStub = stubPipelineSpawn();
+    await PypelineRun.run(['--training']);
+    const trainingCall = (spawnStub.args as unknown[][]).find(
+      (a) => Array.isArray(a[1]) && (a[1] as string[]).includes('training')
+    );
+    expect(trainingCall).to.not.equal(undefined);
+  });
+
+  // ── Melhoria 4: regex Status : Failed ───────────────────────────────────
+
+  it('deve fazer rollback se o log contiver "Status : Failed"', async () => {
+    setupBaseFs('Deploy completed.\nStatus : Failed\nErrors found.');
+    stubPipelineSpawn();
+    await assertRejects(PypelineRun.run([]), /validate PRD/);
+  });
+
+  it('não deve fazer rollback se o log não contiver "Status : Failed"', async () => {
+    setupBaseFs(`Status : Succeeded\nJob ID: ${FAKE_JOB_ID}`);
+    stubPipelineSpawn();
+    const result = await PypelineRun.run([]);
+    expect(result.success).to.equal(true);
+  });
+
+  // ── Rollback ───────────────────────────────────────────────────────────
 
   it('deve fazer rollback e lançar erro se o build falhar', async () => {
     setupBaseFs();
@@ -92,22 +153,6 @@ describe('pypeline run', () => {
     setupBaseFs();
     stubPipelineSpawn({ validate: 1 });
     await assertRejects(PypelineRun.run([]), /pypeline validate prd/);
-  });
-
-  it('deve fazer rollback se o log de PRD contiver erros', async () => {
-    setupBaseFs('Deploy failed: error in class MyClass');
-    stubPipelineSpawn();
-    await assertRejects(PypelineRun.run([]), /validate PRD/);
-  });
-
-  it('com --skip-training não deve chamar pypeline deploy training', async () => {
-    setupBaseFs();
-    const spawnStub = stubPipelineSpawn();
-    await PypelineRun.run(['--skip-training']);
-    const trainingCall = (spawnStub.args as unknown[][]).find(
-      (a) => Array.isArray(a[1]) && (a[1] as string[]).includes('training')
-    );
-    expect(trainingCall).to.equal(undefined);
   });
 
   it('deve falhar imediatamente se baseline.txt não existir', async () => {

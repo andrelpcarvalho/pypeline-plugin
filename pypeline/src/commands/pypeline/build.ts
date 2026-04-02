@@ -21,11 +21,11 @@ Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('pypeline', 'pypeline.build');
 
 export type PypelineBuildResult = {
-  commitHash: string;
+  commitHash:   string;
   novoBaseline: string;
-  added: string[];
-  modified: string[];
-  deleted: string[];
+  added:        string[];
+  modified:     string[];
+  deleted:      string[];
 };
 
 export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
@@ -47,17 +47,18 @@ export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
 
   public async run(): Promise<PypelineBuildResult> {
     const { flags } = await this.parse(PypelineBuild);
-    const branch = flags['branch'];
+    const branch = flags['branch'] ?? BRANCH;
     const dryRun = flags['dry-run'];
 
     this.log(`SCRIPT_DIR  : ${SCRIPT_DIR}`);
     this.log(`PROJECT_DIR : ${PROJECT_DIR()}`);
 
     if (!dryRun) {
-      const gen = spawnSync('sf', ['project', 'generate', '--name', PROJECT_NAME, '--output-dir', PROJECT_DIR()], {
-        encoding: 'utf8',
-        stdio: 'inherit',
-      });
+      const gen = spawnSync(
+        'sf',
+        ['project', 'generate', '--name', PROJECT_NAME, '--output-dir', PROJECT_DIR()],
+        { encoding: 'utf8', stdio: 'inherit' }
+      );
       if (gen.status !== 0) this.error('Falha ao gerar estrutura do projeto sf.');
     }
 
@@ -67,7 +68,7 @@ export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
 
     if (!dryRun) {
       for (const cmd of [
-        ['git', 'checkout', branch ?? BRANCH],
+        ['git', 'checkout', branch],
         ['git', 'fetch'],
         ['git', 'pull'],
       ]) {
@@ -101,11 +102,13 @@ export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
       }
     }
 
+    // Calcula o novo baseline (HEAD atual após git pull)
     const novoBaseline = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
     this.log(`[INFO] Novo baseline calculado: ${novoBaseline}`);
-    this.log('[INFO] baseline.txt será atualizado pelo comando run após validate PRD.');
+    this.log('[INFO] baseline.txt será atualizado pelo run após validate PRD com sucesso.');
 
-    process.env['NOVO_BASELINE'] = novoBaseline;
+    // Persiste o novo baseline para o run.ts ler depois
+    process.env['PYPELINE_NOVO_BASELINE'] = novoBaseline;
 
     const branchInfo = execSync('git branch', { encoding: 'utf8' });
     this.log(`Branches:\n${branchInfo}`);

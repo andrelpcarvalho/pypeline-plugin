@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { BUILD_DIR } from '../../config.js';
@@ -19,13 +19,14 @@ export default class PypelinePackage extends SfCommand<PypelinePackageResult> {
   public async run(): Promise<PypelinePackageResult> {
     this.log('Gerando package.xml...');
 
-    const result = spawnSync(
-      'sf',
-      ['project', 'generate', 'manifest', '--source-dir', BUILD_DIR],
-      { stdio: 'inherit', encoding: 'utf8' }
-    );
+    const exitCode = await new Promise<number>((resolve) => {
+      const proc = spawn('sf', ['project', 'generate', 'manifest', '--source-dir', BUILD_DIR], {
+        stdio: 'inherit',
+      });
+      proc.on('close', (code) => resolve(code ?? 1));
+    });
 
-    if (result.status !== 0) {
+    if (exitCode !== 0) {
       this.error('Falha ao gerar package.xml.');
     }
 

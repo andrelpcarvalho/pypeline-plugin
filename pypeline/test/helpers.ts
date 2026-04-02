@@ -2,17 +2,13 @@
  * test/helpers.ts
  *
  * Utilitários compartilhados pelos testes unit.
- *
- * CONCEITO: "stub" é um dublê que substitui uma função real durante o teste.
- * Ex: em vez de chamar fs.existsSync de verdade (que lê o disco),
- *     substituímos por uma função falsa que retorna o valor que precisamos.
  */
 
-import * as fs from 'node:fs';
 import * as childProcess from 'node:child_process';
+import * as fs from 'node:fs';
 import sinon from 'sinon';
 
-// ── Fixtures (dados falsos reutilizáveis) ──────────────────────────────────
+// ── Fixtures ───────────────────────────────────────────────────────────────
 
 export const FAKE_COMMIT_HASH  = 'abc1234def5678901234567890abcdef12345678';
 export const FAKE_NEW_BASELINE = 'zzz9999aaa0000bbb1111ccc2222ddd3333eee44';
@@ -24,23 +20,35 @@ export const FAKE_GIT_DIFF = [
   'D\tforce-app/main/default/classes/OldClass.cls',
 ].join('\n');
 
+// ── Helper de assert para Promises ────────────────────────────────────────
+/**
+ * Wrapper tipado para usar rejectedWith sem unsafe-call.
+ * Uso: await assertRejects(promise, /padrão/)
+ */
+export async function assertRejects(promise: Promise<unknown>, pattern: RegExp): Promise<void> {
+  try {
+    await promise;
+    throw new Error(`Expected promise to reject with ${pattern.toString()} but it resolved.`);
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message.startsWith('Expected promise to reject')) {
+      throw err;
+    }
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!pattern.test(msg)) {
+      throw new Error(`Expected error message to match ${pattern.toString()} but got: "${msg}"`);
+    }
+  }
+}
+
 // ── Helpers de stub ────────────────────────────────────────────────────────
 
-/**
- * Cria stubs padrão para o sistema de arquivos.
- * Evita qualquer leitura/escrita real em disco durante os testes.
- */
-export function stubFs(sandbox: sinon.SinonSandbox, overrides: {
-  existsSync?: boolean | Record<string, boolean>;
-  readFileSync?: string;
-  mkdirSync?: void;
-  writeFileSync?: void;
-  rmSync?: void;
-  copyFileSync?: void;
-  cpSync?: void;
-  unlinkSync?: void;
-} = {}) {
-  // existsSync: aceita um booleano fixo ou um mapa de path → boolean
+export function stubFs(
+  sandbox: sinon.SinonSandbox,
+  overrides: {
+    existsSync?: boolean | Record<string, boolean>;
+    readFileSync?: string;
+  } = {}
+): sinon.SinonStub {
   const existsSyncStub = sandbox.stub(fs, 'existsSync');
   if (typeof overrides.existsSync === 'object') {
     existsSyncStub.callsFake((p: unknown) =>
@@ -61,29 +69,24 @@ export function stubFs(sandbox: sinon.SinonSandbox, overrides: {
   return existsSyncStub;
 }
 
-/**
- * Cria stubs para execSync (git commands).
- * Por padrão retorna strings que simulam saídas comuns do git.
- */
-export function stubExecSync(sandbox: sinon.SinonSandbox, overrides: Record<string, string> = {}) {
+export function stubExecSync(
+  sandbox: sinon.SinonSandbox,
+  overrides: Record<string, string> = {}
+): sinon.SinonStub {
   return sandbox.stub(childProcess, 'execSync').callsFake((cmd: unknown) => {
     const cmdStr = String(cmd);
     for (const [pattern, result] of Object.entries(overrides)) {
       if (cmdStr.includes(pattern)) return result;
     }
-    if (cmdStr.includes('git diff'))      return FAKE_GIT_DIFF;
-    if (cmdStr.includes('rev-parse'))     return FAKE_NEW_BASELINE + '\n';
-    if (cmdStr.includes('rev-list'))      return 'commit1\ncommit2\n';
-    if (cmdStr.includes('git branch'))    return '* release-v4.0.0\n';
+    if (cmdStr.includes('git diff'))   return FAKE_GIT_DIFF;
+    if (cmdStr.includes('rev-parse'))  return FAKE_NEW_BASELINE + '\n';
+    if (cmdStr.includes('rev-list'))   return 'commit1\ncommit2\n';
+    if (cmdStr.includes('git branch')) return '* release-v4.0.0\n';
     return '';
   });
 }
 
-/**
- * Cria um stub para spawnSync (comandos sf como project generate).
- * Por padrão simula sucesso (status: 0).
- */
-export function stubSpawnSync(sandbox: sinon.SinonSandbox, status = 0) {
+export function stubSpawnSync(sandbox: sinon.SinonSandbox, status = 0): sinon.SinonStub {
   return sandbox.stub(childProcess, 'spawnSync').returns({
     status,
     pid: 1234,
@@ -94,29 +97,24 @@ export function stubSpawnSync(sandbox: sinon.SinonSandbox, status = 0) {
   });
 }
 
-/**
- * Cria um stub para spawn (processos com stream de output).
- * Emite linhas de log e termina com o código fornecido.
- */
-export function stubSpawn(sandbox: sinon.SinonSandbox, options: {
-  exitCode?: number;
-  lines?: string[];
-} = {}) {
+export function stubSpawn(
+  sandbox: sinon.SinonSandbox,
+  options: { exitCode?: number; lines?: string[] } = {}
+): sinon.SinonStub {
   const { exitCode = 0, lines = ['Deploy successful\n'] } = options;
 
-  // Simulamos um EventEmitter mínimo para imitar o objeto retornado por spawn()
   const fakeProc = {
     stdout: {
-      on: (event: string, cb: (chunk: Buffer) => void) => {
+      on: (event: string, cb: (chunk: Buffer) => void): void => {
         if (event === 'data') {
           for (const line of lines) cb(Buffer.from(line));
         }
       },
     },
     stderr: {
-      on: (_event: string, _cb: unknown) => { /* noop */ },
+      on: (): void => { /* noop */ },
     },
-    on: (event: string, cb: (code: number) => void) => {
+    on: (event: string, cb: (code: number) => void): void => {
       if (event === 'close') cb(exitCode);
     },
   };
@@ -124,15 +122,10 @@ export function stubSpawn(sandbox: sinon.SinonSandbox, options: {
   return sandbox.stub(childProcess, 'spawn').returns(fakeProc as never);
 }
 
-/**
- * Cria um stub para fs.createWriteStream — evita criar arquivos de log reais.
- */
-export function stubCreateWriteStream(sandbox: sinon.SinonSandbox) {
-  const fakeStream = {
-    write: sinon.stub(),
-    close: sinon.stub(),
-    on: sinon.stub(),
-  };
+export function stubCreateWriteStream(
+  sandbox: sinon.SinonSandbox
+): { write: sinon.SinonStub; close: sinon.SinonStub; on: sinon.SinonStub } {
+  const fakeStream = { write: sinon.stub(), close: sinon.stub(), on: sinon.stub() };
   sandbox.stub(fs, 'createWriteStream').returns(fakeStream as never);
   return fakeStream;
 }

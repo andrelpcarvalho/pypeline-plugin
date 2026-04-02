@@ -29,7 +29,7 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
 
   public static readonly flags = {
     'target-org': Flags.string({
-      char: 'o',
+      // char 'o' removido — reservado para target-org nativo do sf CLI (sf-plugin/dash-o)
       summary: messages.getMessage('flags.target-org.summary'),
       default: 'devops',
     }),
@@ -77,11 +77,10 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
     this.log(`[INFO] Job ID: ${jobId}`);
     this.log('[INFO] Validate expira em 10 horas após a geração.');
     this.log('');
-    this.log(`  Org alvo : ${flags['target-org']}`);
+    this.log(`  Org alvo : ${flags['target-org'] ?? 'devops'}`);
     this.log(`  Job ID   : ${jobId}`);
     this.log('');
 
-    // Confirmação interativa (pode ser pulada com --no-prompt)
     if (!flags['no-prompt']) {
       const confirmed = await this.confirm({ message: 'Confirma o quick deploy em PRODUÇÃO?' });
       if (!confirmed) {
@@ -96,8 +95,8 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
     const cmd = [
       'project', 'deploy', 'quick',
       '--job-id',     jobId,
-      '--target-org', flags['target-org'],
-      '-w',           String(flags['wait']),
+      '--target-org', flags['target-org'] ?? 'devops',
+      '-w',           String(flags['wait'] ?? 240),
       '--verbose',
     ];
 

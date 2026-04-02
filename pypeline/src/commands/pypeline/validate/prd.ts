@@ -8,7 +8,7 @@ import {
   SOURCE_DIR,
   unlinkIfExists,
   writeFile,
-} from '../../config.js';
+} from '../../../config.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('pypeline', 'pypeline.validate.prd');
@@ -28,7 +28,7 @@ export default class PypelineValidatePrd extends SfCommand<PypelineValidatePrdRe
 
   public static readonly flags = {
     'target-org': Flags.string({
-      // char 'o' removido — reservado para target-org nativo (sf-plugin/dash-o)
+      // removido char: 'o' — conflita com a convenção sf-plugin/dash-o
       summary: messages.getMessage('flags.target-org.summary'),
       default: 'devops',
     }),
@@ -83,7 +83,6 @@ export default class PypelineValidatePrd extends SfCommand<PypelineValidatePrdRe
       this.error(`Validate em PRD falhou com exit code ${exitCode}.`);
     }
 
-    // Atribui a uma const tipada para evitar "never" na concatenação
     if (jobId !== null) {
       const safeJobId: string = jobId;
       writeFile(JOB_ID_FILE, safeJobId + '\n');

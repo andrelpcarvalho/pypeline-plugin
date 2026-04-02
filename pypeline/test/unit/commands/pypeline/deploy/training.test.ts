@@ -1,19 +1,12 @@
 /**
  * test/unit/commands/pypeline/deploy/training.test.ts
- *
- * CONCEITO DE PROMISE + EVENTEMITTER FAKE:
- * O comando deploy training usa spawn() e escuta eventos ('data', 'close').
- * Em vez de subir um processo real, criamos um objeto que imita
- * essa interface (stdout.on, stderr.on, proc.on) e dispara os eventos
- * de forma síncrona durante o teste.
  */
 
-import * as childProcess from 'node:child_process';
 import * as fs from 'node:fs';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import PypelineDeployTraining from '../../../../../src/commands/pypeline/deploy/training.js';
-import { stubSpawn, stubCreateWriteStream } from '../../../../helpers.js';
+import { assertRejects, stubSpawn, stubCreateWriteStream } from '../../../../helpers.js';
 
 describe('pypeline deploy training', () => {
   let sandbox: sinon.SinonSandbox;
@@ -24,27 +17,23 @@ describe('pypeline deploy training', () => {
     stubSpawn(sandbox, { exitCode: 0, lines: ['Deploy successful\n'] });
     stubCreateWriteStream(sandbox);
     sandbox.stub(fs, 'unlinkSync');
-
     const result = await PypelineDeployTraining.run([]);
-    expect(result.success).to.be.true;
+    expect(result.success).to.equal(true);
   });
 
   it('deve lançar erro quando o deploy falha (exit code 1)', async () => {
     stubSpawn(sandbox, { exitCode: 1, lines: ['Error: something went wrong\n'] });
     stubCreateWriteStream(sandbox);
     sandbox.stub(fs, 'unlinkSync');
-
-    await expect(PypelineDeployTraining.run([])).to.be.rejectedWith(/falhou com exit code 1/);
+    await assertRejects(PypelineDeployTraining.run([]), /falhou com exit code 1/);
   });
 
   it('deve respeitar flag --target-org customizada', async () => {
     const spawnStub = stubSpawn(sandbox, { exitCode: 0 });
     stubCreateWriteStream(sandbox);
     sandbox.stub(fs, 'unlinkSync');
-
     await PypelineDeployTraining.run(['--target-org', 'minha-org-treino']);
-
-    const args: string[] = spawnStub.firstCall.args[1];
+    const args = spawnStub.firstCall.args[1] as string[];
     expect(args).to.include('minha-org-treino');
   });
 
@@ -52,10 +41,8 @@ describe('pypeline deploy training', () => {
     const spawnStub = stubSpawn(sandbox, { exitCode: 0 });
     stubCreateWriteStream(sandbox);
     sandbox.stub(fs, 'unlinkSync');
-
     await PypelineDeployTraining.run(['--wait', '60']);
-
-    const args: string[] = spawnStub.firstCall.args[1];
+    const args = spawnStub.firstCall.args[1] as string[];
     expect(args).to.include('60');
   });
 
@@ -63,11 +50,9 @@ describe('pypeline deploy training', () => {
     stubSpawn(sandbox, { exitCode: 0, lines: ['linha de log\n'] });
     const { write: writeStub } = stubCreateWriteStream(sandbox);
     sandbox.stub(fs, 'unlinkSync');
-
     await PypelineDeployTraining.run([]);
-
-    expect(writeStub.called).to.be.true;
-    const written = writeStub.args.map((a: unknown[]) => String(a[0])).join('');
+    expect(writeStub.called).to.equal(true);
+    const written = (writeStub.args as unknown[][]).map((a) => String(a[0])).join('');
     expect(written).to.include('linha de log');
   });
 });

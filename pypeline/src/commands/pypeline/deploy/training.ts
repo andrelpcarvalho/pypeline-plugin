@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { LOG_TRAINING, SOURCE_DIR, unlinkIfExists } from '../../config.js';
+import { LOG_TRAINING, SOURCE_DIR, unlinkIfExists } from '../../../config.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('pypeline', 'pypeline.deploy.training');
@@ -19,7 +19,7 @@ export default class PypelineDeployTraining extends SfCommand<PypelineDeployTrai
 
   public static readonly flags = {
     'target-org': Flags.string({
-      // char 'o' removido — reservado para target-org nativo (sf-plugin/dash-o)
+      // char 'o' removido — reservado para target-org nativo do sf CLI (sf-plugin/dash-o)
       summary: messages.getMessage('flags.target-org.summary'),
       default: 'treino',
     }),

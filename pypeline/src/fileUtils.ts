@@ -16,17 +16,17 @@ const SPECIAL_CHARS: Record<string, string> = {
   '\\\\303\\\\265': 'õ',
 };
 
-function replaceSpecialChars(filename: string): string {
+function replaceSpecialChars(input: string): string {
+  let result = input;
   for (const [escaped, char] of Object.entries(SPECIAL_CHARS)) {
-    filename = filename.replace(new RegExp(escaped, 'g'), char);
+    result = result.replace(new RegExp(escaped, 'g'), char);
   }
-  return filename;
+  return result;
 }
 
-export function cleanFilename(filename: string): string {
-  filename = replaceSpecialChars(filename);
-  filename = filename.replace(/^"|"$/g, '');
-  return filename;
+export function cleanFilename(input: string): string {
+  const replaced = replaceSpecialChars(input);
+  return replaced.replace(/^"|"$/g, '');
 }
 
 // ── Funções de cópia ───────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ function copyClassMeta(cleanedFile: string, buildDir: string): void {
 
 function copyExtensionFilePath(file: string, buildDir: string): void {
   const p       = path.parse(file);
-  const upFile  = path.dirname(p.dir);          // parent of parent
+  const upFile  = path.dirname(p.dir);
   const destino = path.dirname(upFile);
   ensureDir(path.join(buildDir, destino));
   copyRecursive(path.join(LOCAL_DIR, upFile), path.join(buildDir, upFile));

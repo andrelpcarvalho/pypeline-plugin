@@ -1,8 +1,16 @@
 {
   "name": "pypeline",
   "description": "Complete pipeline devops, for build a project based on git repo, generation of package xml, validate on producction enviroment and a quick deploy structure.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "license" : "MIT",
+  "repository": {
+  "type": "git",
+    "url": "https://github.com/andrelpcarvalho/pypeline-plugin.git"
+  },
+  "homepage": "https://github.com/andrelpcarvalho/pypeline-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/andrelpcarvalho/pypeline-plugin/issues"
+  },
   "dependencies": {
     "@oclif/core": "^4",
     "@salesforce/core": "^8",

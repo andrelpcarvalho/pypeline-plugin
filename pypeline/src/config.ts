@@ -4,19 +4,12 @@ import * as path from 'node:path';
 
 // ── Resolução de caminhos em runtime ──────────────────────────────────────
 //
-// IMPORTANTE: todos os caminhos são resolvidos a partir de process.cwd()
-// (o diretório onde o usuário executa o comando sf), NÃO a partir do
-// diretório de instalação do plugin.
-//
-// Isso permite que o plugin seja publicado no npm e instalado em qualquer
-// máquina sem depender de uma estrutura de pastas específica como
-// 'workspace_bash'. O usuário simplesmente executa o comando dentro do
-// diretório do seu projeto git Salesforce.
+// Todos os caminhos resolvem a partir de process.cwd() — o diretório onde
+// o usuário executa o comando sf. O plugin pode ser instalado em qualquer
+// máquina sem depender de uma estrutura de pastas específica.
 
-// Nome do repositório local Salesforce (pasta irmã do cwd ou configurável)
 const SF_REPO_NAME = process.env['PYPELINE_SF_REPO'] ?? 'sforce-sfdc-bvsa-organization';
 
-// Diretório de trabalho do usuário no momento da execução
 export const PROJECT_DIR  = (): string => process.cwd();
 export const LOCAL_DIR    = (): string => path.join(process.cwd(), SF_REPO_NAME);
 export const SCRIPT_DIR   = path.dirname(new URL(import.meta.url).pathname);

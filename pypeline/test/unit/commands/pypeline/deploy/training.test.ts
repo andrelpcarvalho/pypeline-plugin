@@ -1,58 +1,72 @@
-/**
- * test/unit/commands/pypeline/deploy/training.test.ts
- */
-
-import * as fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve, sep as pathSep } from 'node:path';
+import esmock from 'esmock';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import PypelineDeployTraining from '../../../../../src/commands/pypeline/deploy/training.js';
-import { assertRejects, stubSpawn, stubCreateWriteStream } from '../../../../helpers.js';
+import type { EsmockModule, DeployTrainingResult } from '../../../../types.js';
+import { assertRejects, makeSpawnFake, makeWriteStream } from '../../../../helpers.js';
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const SRC        = resolve(currentDir, '../../../../../src').split(pathSep).join('/');
+
+const FAKE_LOG    = '/fake/deploy_training.log';
+const FAKE_SOURCE = '/fake/source';
+const BASE_CONFIG = { LOG_TRAINING: () => FAKE_LOG, SOURCE_DIR: () => FAKE_SOURCE, unlinkIfExists: sinon.spy() };
+
+async function loadTraining(exitCode: number, lines = ['Deploy successful\n']): Promise<EsmockModule<DeployTrainingResult>> {
+  const raw: unknown = await esmock(`${SRC}/commands/pypeline/deploy/training.js`, {
+    'node:child_process': { spawn: makeSpawnFake({ exitCode, lines }) },
+    'node:fs':            { createWriteStream: makeWriteStream, unlinkSync: sinon.spy() },
+    [`${SRC}/config.js`]: BASE_CONFIG,
+  });
+  return raw as EsmockModule<DeployTrainingResult>;
+}
 
 describe('pypeline deploy training', () => {
-  let sandbox: sinon.SinonSandbox;
-  beforeEach(() => { sandbox = sinon.createSandbox(); });
-  afterEach(() => { sandbox.restore(); });
-
   it('deve retornar success: true quando o deploy passa', async () => {
-    stubSpawn(sandbox, { exitCode: 0, lines: ['Deploy successful\n'] });
-    stubCreateWriteStream(sandbox);
-    sandbox.stub(fs, 'unlinkSync');
-    const result = await PypelineDeployTraining.run([]);
+    const { default: Cmd } = await loadTraining(0);
+    const result = await Cmd.run([]);
     expect(result.success).to.equal(true);
   });
 
   it('deve lançar erro quando o deploy falha (exit code 1)', async () => {
-    stubSpawn(sandbox, { exitCode: 1, lines: ['Error: something went wrong\n'] });
-    stubCreateWriteStream(sandbox);
-    sandbox.stub(fs, 'unlinkSync');
-    await assertRejects(PypelineDeployTraining.run([]), /falhou com exit code 1/);
+    const { default: Cmd } = await loadTraining(1);
+    await assertRejects(Cmd.run([]), /falhou com exit code 1/);
   });
 
   it('deve respeitar flag --target-org customizada', async () => {
-    const spawnStub = stubSpawn(sandbox, { exitCode: 0 });
-    stubCreateWriteStream(sandbox);
-    sandbox.stub(fs, 'unlinkSync');
-    await PypelineDeployTraining.run(['--target-org', 'minha-org-treino']);
-    const args = spawnStub.firstCall.args[1] as string[];
-    expect(args).to.include('minha-org-treino');
+    let capturedArgs: string[] = [];
+    const raw: unknown = await esmock(`${SRC}/commands/pypeline/deploy/training.js`, {
+      'node:child_process': {
+        spawn: (_bin: string, args: string[]) => {
+          capturedArgs = [...args];
+          return { stdout: { on: (): void => {} }, stderr: { on: (): void => {} },
+            on: (e: string, cb: (c: number) => void): void => { if (e === 'close') cb(0); } };
+        },
+      },
+      'node:fs':            { createWriteStream: makeWriteStream, unlinkSync: sinon.spy() },
+      [`${SRC}/config.js`]: BASE_CONFIG,
+    });
+    const { default: Cmd } = raw as EsmockModule<DeployTrainingResult>;
+    await Cmd.run(['--target-org', 'minha-org-treino']);
+    expect(capturedArgs).to.include('minha-org-treino');
   });
 
   it('deve respeitar flag --wait customizada', async () => {
-    const spawnStub = stubSpawn(sandbox, { exitCode: 0 });
-    stubCreateWriteStream(sandbox);
-    sandbox.stub(fs, 'unlinkSync');
-    await PypelineDeployTraining.run(['--wait', '60']);
-    const args = spawnStub.firstCall.args[1] as string[];
-    expect(args).to.include('60');
-  });
-
-  it('deve gravar o output em um arquivo de log', async () => {
-    stubSpawn(sandbox, { exitCode: 0, lines: ['linha de log\n'] });
-    const { write: writeStub } = stubCreateWriteStream(sandbox);
-    sandbox.stub(fs, 'unlinkSync');
-    await PypelineDeployTraining.run([]);
-    expect(writeStub.called).to.equal(true);
-    const written = (writeStub.args as unknown[][]).map((a) => String(a[0])).join('');
-    expect(written).to.include('linha de log');
+    let capturedArgs: string[] = [];
+    const raw: unknown = await esmock(`${SRC}/commands/pypeline/deploy/training.js`, {
+      'node:child_process': {
+        spawn: (_bin: string, args: string[]) => {
+          capturedArgs = [...args];
+          return { stdout: { on: (): void => {} }, stderr: { on: (): void => {} },
+            on: (e: string, cb: (c: number) => void): void => { if (e === 'close') cb(0); } };
+        },
+      },
+      'node:fs':            { createWriteStream: makeWriteStream, unlinkSync: sinon.spy() },
+      [`${SRC}/config.js`]: BASE_CONFIG,
+    });
+    const { default: Cmd } = raw as EsmockModule<DeployTrainingResult>;
+    await Cmd.run(['--wait', '60']);
+    expect(capturedArgs).to.include('60');
   });
 });

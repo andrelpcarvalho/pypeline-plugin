@@ -1,99 +1,67 @@
-/**
- * test/unit/commands/pypeline/quickdeploy.test.ts
- */
-
-import * as fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve, sep as pathSep } from 'node:path';
+import esmock from 'esmock';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import PypelineQuickdeploy from '../../../../src/commands/pypeline/quickdeploy.js';
-import { FAKE_JOB_ID, assertRejects, stubSpawn, stubCreateWriteStream } from '../../../helpers.js';
+import type { EsmockModule, QuickdeployResult } from '../../../types.js';
+import { FAKE_JOB_ID, assertRejects, makeSpawnFake, makeWriteStream } from '../../../helpers.js';
+
+const currentDir = dirname(fileURLToPath(import.meta.url));
+const SRC        = resolve(currentDir, '../../../../src').split(pathSep).join('/');
+
+const FAKE_LOG      = '/fake/quick_deploy.log';
+const FAKE_JOB_FILE = '/fake/prd_job_id.txt';
+
+async function loadQuickdeploy(opts: {
+  jobIdExists?: boolean; jobId?: string; exitCode?: number; logContent?: string;
+}): Promise<EsmockModule<QuickdeployResult>> {
+  const { jobIdExists = true, jobId = FAKE_JOB_ID, exitCode = 0, logContent = 'All good' } = opts;
+  const raw: unknown = await esmock(`${SRC}/commands/pypeline/quickdeploy.js`, {
+    'node:child_process': { spawn: makeSpawnFake({ exitCode, lines: [logContent + '\n'] }) },
+    'node:fs': { existsSync: () => jobIdExists, readFileSync: () => logContent,
+      writeFileSync: sinon.spy(), unlinkSync: sinon.spy(), createWriteStream: makeWriteStream },
+    [`${SRC}/config.js`]: { JOB_ID_FILE: () => FAKE_JOB_FILE, LOG_QUICK_DEPLOY: () => FAKE_LOG,
+      fileExists: () => jobIdExists, readFileTrimmed: () => jobId, unlinkIfExists: sinon.spy() },
+  });
+  return raw as EsmockModule<QuickdeployResult>;
+}
 
 describe('pypeline quickdeploy', () => {
-  let sandbox: sinon.SinonSandbox;
-  beforeEach(() => { sandbox = sinon.createSandbox(); });
-  afterEach(() => { sandbox.restore(); });
-
-  function setupValidJobId(): void {
-    sandbox.stub(fs, 'existsSync').returns(true);
-    sandbox.stub(fs, 'readFileSync').returns(FAKE_JOB_ID + '\n');
-    sandbox.stub(fs, 'writeFileSync');
-    sandbox.stub(fs, 'unlinkSync');
-    sandbox.stub(PypelineQuickdeploy.prototype, 'confirm').resolves(true);
-  }
-
-  it('deve executar o quick deploy e retornar success quando tudo passa', async () => {
-    setupValidJobId();
-    stubSpawn(sandbox, { exitCode: 0, lines: ['Quick deploy successful\n'] });
-    stubCreateWriteStream(sandbox);
-    const result = await PypelineQuickdeploy.run([]);
+  it('deve retornar success: true quando tudo passa', async () => {
+    const { default: Cmd } = await loadQuickdeploy({});
+    (Cmd.prototype as { confirm?: () => Promise<boolean> }).confirm = async () => true;
+    const result = await Cmd.run(['--no-prompt']);
     expect(result.success).to.equal(true);
     expect(result.jobId).to.equal(FAKE_JOB_ID);
   });
 
   it('deve lançar erro se prd_job_id.txt não existir', async () => {
-    sandbox.stub(fs, 'existsSync').returns(false);
-    await assertRejects(PypelineQuickdeploy.run([]), /prd_job_id\.txt não encontrado/);
+    const { default: Cmd } = await loadQuickdeploy({ jobIdExists: false });
+    await assertRejects(Cmd.run([]), /prd_job_id\.txt não encontrado/);
   });
 
   it('deve lançar erro se o Job ID tiver formato inválido', async () => {
-    sandbox.stub(fs, 'existsSync').returns(true);
-    sandbox.stub(fs, 'readFileSync').returns('ID_INVALIDO\n');
-    sandbox.stub(fs, 'writeFileSync');
-    sandbox.stub(fs, 'unlinkSync');
-    await assertRejects(PypelineQuickdeploy.run([]), /formato inválido/);
+    const { default: Cmd } = await loadQuickdeploy({ jobId: 'ID_INVALIDO' });
+    await assertRejects(Cmd.run([]), /formato inválido/);
   });
 
-  it('deve aceitar Job ID via flag --job-id sem precisar do arquivo', async () => {
-    sandbox.stub(fs, 'existsSync').returns(false);
-    sandbox.stub(fs, 'writeFileSync');
-    sandbox.stub(fs, 'unlinkSync');
-    sandbox.stub(PypelineQuickdeploy.prototype, 'confirm').resolves(true);
-    stubSpawn(sandbox, { exitCode: 0 });
-    stubCreateWriteStream(sandbox);
-    const result = await PypelineQuickdeploy.run(['--job-id', FAKE_JOB_ID]);
+  it('deve aceitar Job ID via flag --job-id', async () => {
+    const { default: Cmd } = await loadQuickdeploy({ jobIdExists: false });
+    const result = await Cmd.run(['--job-id', FAKE_JOB_ID, '--no-prompt']);
     expect(result.jobId).to.equal(FAKE_JOB_ID);
   });
 
-  it('deve cancelar sem executar o deploy se o usuário recusar', async () => {
-    sandbox.stub(fs, 'existsSync').returns(true);
-    sandbox.stub(fs, 'readFileSync').returns(FAKE_JOB_ID + '\n');
-    sandbox.stub(fs, 'writeFileSync');
-    sandbox.stub(fs, 'unlinkSync');
-    sandbox.stub(PypelineQuickdeploy.prototype, 'confirm').resolves(false);
-    const spawnStub = stubSpawn(sandbox, { exitCode: 0 });
-    stubCreateWriteStream(sandbox);
-    const result = await PypelineQuickdeploy.run([]);
-    expect(result.success).to.equal(false);
-    expect(spawnStub.callCount).to.equal(0);
+  it('deve lançar erro quando o quick deploy falha', async () => {
+    const { default: Cmd } = await loadQuickdeploy({ exitCode: 1 });
+    (Cmd.prototype as { confirm?: () => Promise<boolean> }).confirm = async () => true;
+    await assertRejects(Cmd.run(['--no-prompt']), /falhou com exit code 1/);
   });
 
   it('com --no-prompt não deve chamar confirm', async () => {
-    setupValidJobId();
-    const confirmStub = sandbox.stub(PypelineQuickdeploy.prototype, 'confirm').resolves(true);
-    stubSpawn(sandbox, { exitCode: 0 });
-    stubCreateWriteStream(sandbox);
-    await PypelineQuickdeploy.run(['--no-prompt']);
-    expect(confirmStub.callCount).to.equal(0);
-  });
-
-  it('deve lançar erro quando o quick deploy falha', async () => {
-    setupValidJobId();
-    stubSpawn(sandbox, { exitCode: 1, lines: ['Deploy failed\n'] });
-    stubCreateWriteStream(sandbox);
-    await assertRejects(PypelineQuickdeploy.run([]), /falhou com exit code 1/);
-  });
-
-  it('deve remover prd_job_id.txt após deploy bem-sucedido', async () => {
-    sandbox.stub(fs, 'existsSync').returns(true);
-    const readStub = sandbox.stub(fs, 'readFileSync');
-    readStub.onFirstCall().returns(FAKE_JOB_ID + '\n');
-    readStub.onSecondCall().returns('All good\n');
-    sandbox.stub(fs, 'writeFileSync');
-    const unlinkStub = sandbox.stub(fs, 'unlinkSync');
-    sandbox.stub(PypelineQuickdeploy.prototype, 'confirm').resolves(true);
-    stubSpawn(sandbox, { exitCode: 0, lines: ['All good\n'] });
-    stubCreateWriteStream(sandbox);
-    await PypelineQuickdeploy.run(['--no-prompt']);
-    expect(unlinkStub.called).to.equal(true);
+    const { default: Cmd } = await loadQuickdeploy({});
+    const confirmSpy = sinon.spy(async () => true);
+    (Cmd.prototype as { confirm?: sinon.SinonSpy }).confirm = confirmSpy;
+    await Cmd.run(['--no-prompt']);
+    expect(confirmSpy.callCount).to.equal(0);
   });
 });

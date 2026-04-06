@@ -85,6 +85,7 @@ sf pypeline quickdeploy
 
 | Command | Description |
 |---------|-------------|
+| [`sf pypeline init`](#sf-pypeline-init) | Initialize workspace — create baseline.txt, update .gitignore, verify orgs |
 | [`sf pypeline run`](#sf-pypeline-run) | Full pipeline — build → package → validate → (optional) training |
 | [`sf pypeline build`](#sf-pypeline-build) | Git diff → copy changed files to build dir |
 | [`sf pypeline package`](#sf-pypeline-package) | Generate `package.xml` from build dir |
@@ -92,6 +93,20 @@ sf pypeline quickdeploy
 | [`sf pypeline validate prd`](#sf-pypeline-validate-prd) | Validate deploy in production (no commit) |
 | [`sf pypeline quickdeploy`](#sf-pypeline-quickdeploy) | Quick deploy using saved Job ID |
 | [`sf pypeline version`](#sf-pypeline-version) | Show installed version and check for updates |
+
+---
+
+### `sf pypeline init`
+
+Initializes the workspace interactively. Run this once after setting up a new project.
+
+```bash
+sf pypeline init
+```
+
+- Creates `baseline.txt` with the current HEAD commit (if not present)
+- Adds pypeline entries to `.gitignore` (if missing)
+- Checks that the default orgs (`devops` and `treino`) are authenticated
 
 ---
 

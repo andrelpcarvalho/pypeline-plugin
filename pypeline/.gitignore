@@ -37,8 +37,8 @@ test_session*/
 docs/
 
 # ── pypeline — arquivos gerados pelo pipeline no projeto Salesforce ───────────
-# (essas entradas são adicionadas automaticamente pelo sf pypeline init
-#  no .gitignore do projeto Salesforce — não do plugin)
+# (adicionados automaticamente pelo sf pypeline init no projeto Salesforce)
+.pypeline.json
 baseline.txt
 build_deploy/
 lista_arquivos_adicionados.txt

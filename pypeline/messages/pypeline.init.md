@@ -1,19 +1,17 @@
 # summary
-
-Initialize the pypeline workspace: create baseline.txt, update .gitignore and verify org authentication.
+Inicializa o workspace do pypeline: configura branch default, cria baseline.txt, atualiza .gitignore e verifica autenticação das orgs.
 
 # description
+Executa o setup interativo do pypeline no diretório do projeto Salesforce:
 
-Runs an interactive setup for the current Salesforce project directory:
+- Pergunta e salva a branch default em .pypeline.json
+- Cria baseline.txt com o commit HEAD atual (se não existir)
+- Adiciona entradas do pypeline ao .gitignore (se ausentes)
+- Verifica se as orgs padrão (devops e treino) estão autenticadas
 
-- Creates baseline.txt with the current HEAD commit (if not present)
-- Adds pypeline entries to .gitignore (if missing)
-- Checks that the default orgs (devops and treino) are authenticated
-
-Run this command once after cloning or setting up a new workspace.
+Execute este comando uma vez ao configurar um novo workspace. Para alterar a branch default posteriormente, basta rodar sf pypeline init novamente.
 
 # examples
-
-- Initialize the workspace in the current directory:
+- Inicializar o workspace no diretório atual:
 
   <%= config.bin %> <%= command.id %>

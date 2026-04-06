@@ -61,7 +61,7 @@ export default class PypelineQuickdeploy extends SfCommand<PypelineQuickdeployRe
     let jobId = flags['job-id'];
     if (!jobId) {
       if (!fileExists(jobIdFile)) {
-        this.error('prd_job_id.txt não encontrado. Execute sf pypeline run (ou sf pypeline validate prd) antes.');
+        this.error('prd_job_id.txt não encontrado. Execute sf pypeline run (ou sf pypeline validate-prd) antes.');
       }
       jobId = readFileTrimmed(jobIdFile);
     }

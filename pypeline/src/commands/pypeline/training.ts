@@ -2,17 +2,17 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
-import { LOG_TRAINING, SOURCE_DIR, unlinkIfExists } from '../../../config.js';
+import { LOG_TRAINING, SOURCE_DIR, unlinkIfExists } from '../../config.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('pypeline', 'pypeline.deploy.training');
+const messages = Messages.loadMessages('pypeline', 'pypeline.training');
 
-export type PypelineDeployTrainingResult = {
+export type PypelineTrainingResult = {
   success: boolean;
   logPath: string;
 };
 
-export default class PypelineDeployTraining extends SfCommand<PypelineDeployTrainingResult> {
+export default class PypelineTraining extends SfCommand<PypelineTrainingResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
@@ -29,8 +29,8 @@ export default class PypelineDeployTraining extends SfCommand<PypelineDeployTrai
     }),
   };
 
-  public async run(): Promise<PypelineDeployTrainingResult> {
-    const { flags } = await this.parse(PypelineDeployTraining);
+  public async run(): Promise<PypelineTrainingResult> {
+    const { flags } = await this.parse(PypelineTraining);
     const logPath = LOG_TRAINING();
     const sourceDir = SOURCE_DIR();
 

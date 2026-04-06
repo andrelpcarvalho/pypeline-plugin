@@ -8,10 +8,10 @@ import {
   SOURCE_DIR,
   unlinkIfExists,
   writeFile,
-} from '../../../config.js';
+} from '../../config.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('pypeline', 'pypeline.validate.prd');
+const messages = Messages.loadMessages('pypeline', 'pypeline.validate-prd');
 
 const JOB_ID_REGEX = /\b(0Af[0-9A-Za-z]{15})\b/;
 

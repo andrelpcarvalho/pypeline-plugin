@@ -3,8 +3,8 @@ import { dirname, resolve, sep as pathSep } from 'node:path';
 import esmock from 'esmock';
 import { expect } from 'chai';
 import sinon from 'sinon';
-import type { EsmockModule, ValidatePrdResult } from '../../../../types.js';
-import { FAKE_JOB_ID, assertRejects, makeSpawnFake, makeWriteStream } from '../../../../helpers.js';
+import type { EsmockModule, ValidatePrdResult } from '../../../types.js';
+import { FAKE_JOB_ID, assertRejects, makeSpawnFake, makeWriteStream } from '../../../helpers.js';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const SRC        = resolve(currentDir, '../../../../../src').split(pathSep).join('/');
@@ -17,7 +17,7 @@ const BASE_CONFIG   = { LOG_PRD: () => FAKE_LOG, SOURCE_DIR: () => FAKE_SOURCE,
 const BASE_FS       = { createWriteStream: makeWriteStream, unlinkSync: sinon.spy(), writeFileSync: sinon.spy() };
 
 async function loadPrd(lines: string[], exitCode = 0): Promise<EsmockModule<ValidatePrdResult>> {
-  const raw: unknown = await esmock(`${SRC}/commands/pypeline/validate/prd.js`, {
+  const raw: unknown = await esmock(`${SRC}/commands/pypeline/validate-prd.js`, {
     'node:child_process': { spawn: makeSpawnFake({ exitCode, lines }) },
     'node:fs':            BASE_FS,
     [`${SRC}/config.js`]: BASE_CONFIG,
@@ -25,7 +25,7 @@ async function loadPrd(lines: string[], exitCode = 0): Promise<EsmockModule<Vali
   return raw as EsmockModule<ValidatePrdResult>;
 }
 
-describe('pypeline validate prd', () => {
+describe('pypeline validate-prd', () => {
   it('deve extrair o Job ID do output e salvá-lo', async () => {
     const { default: Cmd } = await loadPrd([`Job ID: ${FAKE_JOB_ID}\n`]);
     const result = await Cmd.run([]);
@@ -51,7 +51,7 @@ describe('pypeline validate prd', () => {
 
   it('deve respeitar --target-org customizada', async () => {
     let capturedArgs: string[] = [];
-    const raw: unknown = await esmock(`${SRC}/commands/pypeline/validate/prd.js`, {
+    const raw: unknown = await esmock(`${SRC}/commands/pypeline/validate-prd.js`, {
       'node:child_process': {
         spawn: (_bin: string, args: string[]) => {
           capturedArgs = [...args];

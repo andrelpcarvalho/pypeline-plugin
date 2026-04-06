@@ -16,7 +16,6 @@ import {
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('pypeline', 'pypeline.run');
 
-// ── Melhoria 4: regex específico para Status : Failed do sf CLI ────────────
 const DEPLOY_FAILED_PATTERN = /Status\s*:\s*Failed/i;
 
 function logHasErrors(logPath: string): boolean {
@@ -56,8 +55,6 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
       char: 'b',
       summary: messages.getMessage('flags.branch.summary'),
     }),
-    // ── Melhoria 3: training é opt-in, não opt-out ─────────────────────────
-    // Por padrão o training NÃO roda. Passe --training para habilitá-lo.
     training: Flags.boolean({
       summary: messages.getMessage('flags.training.summary'),
       default: false,
@@ -114,10 +111,6 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     ];
     if ((await runSubcommand(buildArgs)) !== 0) rollback('pypeline build');
 
-    // ── Melhoria 2: lê o novoBaseline calculado pelo build ────────────────
-    // O build.ts salva o HEAD atual em PYPELINE_NOVO_BASELINE.
-    // Se por algum motivo a env não estiver disponível (subprocesso separado),
-    // faz fallback lendo o git rev-parse HEAD diretamente.
     const novoBaseline = process.env['PYPELINE_NOVO_BASELINE'] ?? readFileTrimmed(baselineFile);
     this.log(`[INFO] Novo baseline a ser gravado  : ${novoBaseline}`);
 
@@ -132,7 +125,7 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
       this.log('');
       this.log('==> [3/4] Disparando deploy em Training (paralelo ao PRD)...');
       trainingPromise = runSubcommand([
-        'pypeline', 'deploy', 'training',
+        'pypeline', 'training',                          // ← novo nome
         '--target-org', flags['training-org'] ?? 'treino',
       ]);
       this.log('[INFO] Training rodando em background...');
@@ -145,27 +138,25 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     this.log('');
     this.log('==> [4/4] Validação em PRD...');
     const prdExit = await runSubcommand([
-      'pypeline', 'validate', 'prd',
+      'pypeline', 'validate-prd',                        // ← novo nome
       '--target-org', flags['prd-org'] ?? 'devops',
     ]);
 
     const trainingExit = trainingPromise ? await trainingPromise : null;
 
-    if (prdExit !== 0) rollback('pypeline validate prd (exit code diferente de 0)');
+    if (prdExit !== 0) rollback('pypeline validate-prd (exit code diferente de 0)');
 
-    // ── Melhoria 4: detecta "Status : Failed" no log ─────────────────────
     if (logHasErrors(logPrd)) {
       this.log('[ERRO] Status : Failed detectado no deploy_prd_output.log:');
       let shown = 0;
       for (const l of fs.readFileSync(logPrd, 'utf8').split('\n')) {
         if (DEPLOY_FAILED_PATTERN.test(l)) { this.log(`  ${l}`); if (++shown >= 20) break; }
       }
-      rollback('validate PRD (Status : Failed encontrado no log)');
+      rollback('validate-prd (Status : Failed encontrado no log)');
     }
 
     this.log('[OK] Validação em PRD concluída sem erros.');
 
-    // ── Resultado do Training ────────────────────────────────────────────
     this.log('');
     if (trainingExit === null) {
       this.log('[INFO] Training não executado nesta run (use --training para habilitar).');
@@ -177,11 +168,9 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
       this.log('[OK] Deploy em Training concluído sem erros.');
     }
 
-    // ── Melhoria 2: grava o novoBaseline correto (HEAD do git pull) ───────
     writeFile(baselineFile, novoBaseline + '\n');
     this.log(`[INFO] baseline.txt atualizado para: ${novoBaseline}`);
 
-    // ── Job ID para quick deploy ─────────────────────────────────────────
     const jobId = extractJobId(logPrd);
     if (jobId) {
       writeFile(jobIdFile, jobId + '\n');

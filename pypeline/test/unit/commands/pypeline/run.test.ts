@@ -81,7 +81,7 @@ describe('pypeline run', () => {
     expect(result.baselineUpdated).to.equal(FAKE_NEW_BASELINE);
   });
 
-  it('por padrão não deve chamar pypeline deploy training', async () => {
+  it('por padrão não deve chamar pypeline training', async () => {
     let trainingCalled = false;
     const logContent = `Status : Succeeded\nJob ID: ${FAKE_JOB_ID}`;
     const raw: unknown = await esmock(`${SRC}/commands/pypeline/run.js`, {
@@ -100,7 +100,7 @@ describe('pypeline run', () => {
     expect(trainingCalled).to.equal(false);
   });
 
-  it('com --training deve chamar pypeline deploy training', async () => {
+  it('com --training deve chamar pypeline training', async () => {
     let trainingCalled = false;
     const logContent = `Status : Succeeded\nJob ID: ${FAKE_JOB_ID}`;
     const raw: unknown = await esmock(`${SRC}/commands/pypeline/run.js`, {
@@ -121,7 +121,7 @@ describe('pypeline run', () => {
 
   it('deve fazer rollback se o log contiver "Status : Failed"', async () => {
     const { default: Cmd } = await loadRun({ logContent: 'Status : Failed' });
-    await assertRejects(Cmd.run([]), /validate PRD/);
+    await assertRejects(Cmd.run([]), /validate-prd/);
   });
 
   it('não deve fazer rollback se o log não contiver "Status : Failed"', async () => {
@@ -142,7 +142,7 @@ describe('pypeline run', () => {
 
   it('deve fazer rollback se o validate PRD falhar', async () => {
     const { default: Cmd } = await loadRun({ exitCodes: { validate: 1 } });
-    await assertRejects(Cmd.run([]), /pypeline validate prd/);
+    await assertRejects(Cmd.run([]), /pypeline validate-prd/);
   });
 
   it('deve falhar imediatamente se baseline.txt não existir', async () => {

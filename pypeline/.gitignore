@@ -1,49 +1,54 @@
-# -- CLEAN
-tmp/
-# use yarn by default, so ignore npm
-package-lock.json
+# ── Node ──────────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-error.log*
+yarn-debug.log*
 
-# never checkin npm config
-.npmrc
+# ── TypeScript / Build ────────────────────────────────────────────────────────
+lib/
+*.tsbuildinfo
 
-# debug logs
-npm-error.log
-yarn-error.log
+# ── wireit (cache de build — apagar antes de publicar) ───────────────────────
+.wireit/
 
-
-# compile source
-lib
-
-# test artifacts
-*xunit.xml
-*checkstyle.xml
-*unitcoverage
-.nyc_output
-coverage
-test_session*
-
-# generated docs
-docs
-
-# ignore sfdx-trust files
-*.tgz
-*.sig
-package.json.bak.
-
-
-npm-shrinkwrap.json
+# ── oclif ─────────────────────────────────────────────────────────────────────
 oclif.manifest.json
 oclif.lock
 
-# -- CLEAN ALL
-*.tsbuildinfo
-.eslintcache
-.wireit
-node_modules
+# ── npm publish ───────────────────────────────────────────────────────────────
+*.tgz
+*.sig
+package.json.bak
+npm-shrinkwrap.json
+package-lock.json
+.npmrc
 
-# --
-# put files here you don't want cleaned with sf-clean
+# ── Cobertura de testes ───────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+*xunit.xml
+*checkstyle.xml
+*unitcoverage
 
-# os specific files
+# ── Testes ────────────────────────────────────────────────────────────────────
+test_session*/
+
+# ── Docs gerados ──────────────────────────────────────────────────────────────
+docs/
+
+# ── pypeline — arquivos gerados pelo pipeline no projeto Salesforce ───────────
+# (essas entradas são adicionadas automaticamente pelo sf pypeline init
+#  no .gitignore do projeto Salesforce — não do plugin)
+baseline.txt
+build_deploy/
+lista_arquivos_adicionados.txt
+lista_arquivos_modificados.txt
+lista_arquivos_deletados.txt
+lista_arquivos_naodeletados.txt
+prd_job_id.txt
+deploy_prd_output.log
+deploy_training_output.log
+
+# ── SO ────────────────────────────────────────────────────────────────────────
 .DS_Store
-.idea
+Thumbs.db

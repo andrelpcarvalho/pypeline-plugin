@@ -8,10 +8,8 @@ import * as path from 'node:path';
 // o usuário executa o comando sf. O plugin pode ser instalado em qualquer
 // máquina sem depender de uma estrutura de pastas específica.
 
-const SF_REPO_NAME = process.env['PYPELINE_SF_REPO'] ?? 'sforce-sfdc-bvsa-organization';
-
 export const PROJECT_DIR  = (): string => process.cwd();
-export const LOCAL_DIR    = (): string => path.join(process.cwd(), SF_REPO_NAME);
+export const LOCAL_DIR    = (): string => process.cwd();
 export const SCRIPT_DIR   = path.dirname(new URL(import.meta.url).pathname);
 
 // ── Nomes e pastas ─────────────────────────────────────────────────────────

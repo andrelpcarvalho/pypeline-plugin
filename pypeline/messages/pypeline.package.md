@@ -1,5 +1,5 @@
 # summary
-Etapa 2: gera o package.xml a partir da pasta de build.
+Gera o package.xml a partir da pasta de build.
 
 # description
 Executa sf project generate manifest --source-dir sobre o BUILD_DIR gerado pela etapa de build.

@@ -18,10 +18,10 @@ export default class Version extends SfCommand<VersionResult> {
   public static readonly examples = messages.getMessages('examples');
 
   public run(): Promise<VersionResult> {
-    // Lê a versão instalada do package.json do próprio plugin
+    // package.json fica na raiz do plugin (3 níveis acima de lib/commands/pypeline/)
     const require = createRequire(import.meta.url);
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const pkg = require('../../package.json');
+    const pkg = require('../../../package.json');
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const current = String(pkg.version);
 

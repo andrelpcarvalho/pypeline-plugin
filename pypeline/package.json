@@ -1,8 +1,9 @@
 {
   "name": "pypeline",
   "description": "Complete pipeline devops, for build a project based on git repo, generation of package xml, validate on producction enviroment and a quick deploy structure.",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "dependencies": {
+    "@inquirer/prompts": "7",
     "@oclif/core": "^4",
     "@salesforce/core": "^8",
     "@salesforce/sf-plugins-core": "^12"

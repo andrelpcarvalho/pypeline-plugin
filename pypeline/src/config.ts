@@ -12,10 +12,38 @@ export const PROJECT_DIR  = (): string => process.cwd();
 export const LOCAL_DIR    = (): string => process.cwd();
 export const SCRIPT_DIR   = path.dirname(new URL(import.meta.url).pathname);
 
+// ── Arquivo de configuração local ─────────────────────────────────────────
+//
+// .pypeline.json na raiz do projeto Salesforce persiste as preferências
+// definidas pelo usuário no sf pypeline init.
+// Ordem de precedência: flag CLI → env var → .pypeline.json → default 'main'
+
+export const PYPELINE_CONFIG_FILE = (): string => path.join(process.cwd(), '.pypeline.json');
+
+export type PypelineConfig = {
+  branch?: string;
+};
+
+export function readPypelineConfig(): PypelineConfig {
+  const configFile = PYPELINE_CONFIG_FILE();
+  if (!fs.existsSync(configFile)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(configFile, 'utf8')) as PypelineConfig;
+  } catch {
+    return {};
+  }
+}
+
+export function writePypelineConfig(config: PypelineConfig): void {
+  fs.writeFileSync(PYPELINE_CONFIG_FILE(), JSON.stringify(config, null, 2) + '\n', 'utf8');
+}
+
 // ── Nomes e pastas ─────────────────────────────────────────────────────────
 
 export const PROJECT_NAME = 'build_deploy';
-export const BRANCH       = process.env['PYPELINE_BRANCH'] ?? 'release-v4.0.0';
+
+// Branch: flag CLI > PYPELINE_BRANCH env var > .pypeline.json > 'main'
+export const BRANCH = process.env['PYPELINE_BRANCH'] ?? readPypelineConfig().branch ?? 'main';
 
 export const BUILD_DIR  = (): string => path.join(process.cwd(), PROJECT_NAME);
 export const SOURCE_DIR = (): string => path.join(BUILD_DIR(), 'force-app', 'main', 'default');

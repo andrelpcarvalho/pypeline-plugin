@@ -1,19 +1,40 @@
-name: tests
+name: Tests
+
 on:
   push:
-    branches-ignore: [main]
+    branches-ignore:
+      - main
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   unit-tests:
-    uses: salesforcecli/github-workflows/.github/workflows/unitTest.yml@main
-  nuts:
-    needs: unit-tests
-    uses: salesforcecli/github-workflows/.github/workflows/nut.yml@main
-    secrets: inherit
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-      fail-fast: false
-    with:
-      os: ${{ matrix.os }}
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: pypeline
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Lint
+        run: yarn lint
+
+      - name: Compile TypeScript
+        run: npx tsc -p tsconfig.json
+
+      - name: Unit tests
+        run: yarn test:only

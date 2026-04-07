@@ -43,7 +43,7 @@ jobs:
         run: |
           TAG=${GITHUB_REF#refs/tags/v}
           echo "Publishing version: $TAG"
-          npm version "$TAG" --no-git-tag-version
+          npm pkg set version="$TAG" 
 
       - name: Publish to npm
         run: npm publish

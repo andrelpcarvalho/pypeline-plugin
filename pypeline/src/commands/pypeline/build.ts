@@ -54,12 +54,19 @@ export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
     this.log(`PROJECT_DIR : ${PROJECT_DIR()}`);
 
     if (!dryRun) {
-      const gen = spawnSync(
-        'sf',
-        ['project', 'generate', '--name', PROJECT_NAME, '--output-dir', PROJECT_DIR()],
-        { encoding: 'utf8', stdio: 'inherit' }
-      );
-      if (gen.status !== 0) this.error('Falha ao gerar estrutura do projeto sf.');
+      // Só gera a estrutura sf se ainda não existir — evita conflito com
+      // o sfdx-project.json do projeto Salesforce já existente.
+      const sfdxJson = path.join(PROJECT_DIR(), PROJECT_NAME, 'sfdx-project.json');
+      if (!fs.existsSync(sfdxJson)) {
+        const gen = spawnSync(
+          'sf',
+          ['project', 'generate', '--name', PROJECT_NAME, '--output-dir', PROJECT_DIR()],
+          { encoding: 'utf8', stdio: 'inherit' }
+        );
+        if (gen.status !== 0) this.error('Falha ao gerar estrutura do projeto sf.');
+      } else {
+        this.log(`[INFO] Estrutura do projeto já existe em ${path.join(PROJECT_DIR(), PROJECT_NAME)}, pulando geração.`);
+      }
     }
 
     if (!fileExists(BASELINE_FILE())) this.error('baseline.txt não encontrado!');
@@ -110,8 +117,8 @@ export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
     // Persiste o novo baseline para o run.ts ler depois
     process.env['PYPELINE_NOVO_BASELINE'] = novoBaseline;
 
-    const branchInfo = execSync('git branch', { encoding: 'utf8' });
-    this.log(`Branches:\n${branchInfo}`);
+    const branchAtual = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
+    this.log(`Branches:\n* ${branchAtual}`);
     this.log(`Build project criado em ${BUILD_DIR()}.`);
 
     return { commitHash, novoBaseline, added: diff.added, modified: diff.modified, deleted: diff.deleted };

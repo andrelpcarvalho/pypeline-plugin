@@ -36,16 +36,69 @@ jobs:
       - name: Compile TypeScript
         run: npx tsc -p tsconfig.json
 
+      - name: Unit tests
+        run: yarn test:only
+
       - name: Generate oclif manifest
         run: npx oclif manifest
 
-      - name: Set version from tag
+      # ── Detecta o tipo de release a partir da tag ──────────────────────
+      #
+      # Tags suportadas:
+      #   v1.2.0             → stable  (latest)
+      #   v1.3.0-rc.1        → rc      (rc)
+      #   v1.4.0-alpha.1     → alpha   (alpha)
+      #   v1.4.0-beta.1      → beta    (beta)
+      #
+      # O npm dist-tag controla o que `sf plugins install pypeline` instala.
+      # Apenas a tag "latest" é instalada por padrão. As demais exigem:
+      #   sf plugins install pypeline@rc
+      #   sf plugins install pypeline@alpha
+      #   sf plugins install pypeline@beta
+
+      - name: Detect release channel
+        id: channel
         run: |
           TAG=${GITHUB_REF#refs/tags/v}
-          echo "Publishing version: $TAG"
-          npm pkg set version="$TAG" 
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+
+          if [[ "$TAG" == *"-alpha"* ]]; then
+            echo "dist_tag=alpha" >> "$GITHUB_OUTPUT"
+            echo "channel=alpha" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" == *"-beta"* ]]; then
+            echo "dist_tag=beta" >> "$GITHUB_OUTPUT"
+            echo "channel=beta" >> "$GITHUB_OUTPUT"
+          elif [[ "$TAG" == *"-rc"* ]]; then
+            echo "dist_tag=rc" >> "$GITHUB_OUTPUT"
+            echo "channel=rc" >> "$GITHUB_OUTPUT"
+          else
+            echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "──────────────────────────────────────"
+          echo "  Tag      : $TAG"
+          echo "  Channel  : $(grep channel "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
+          echo "  Dist-tag : $(grep dist_tag "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2)"
+          echo "──────────────────────────────────────"
+
+      - name: Set version from tag
+        run: |
+          echo "Publishing version: ${{ steps.channel.outputs.version }}"
+          npm pkg set version="${{ steps.channel.outputs.version }}"
 
       - name: Publish to npm
-        run: npm publish
+        run: npm publish --tag ${{ steps.channel.outputs.dist_tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "### Published pypeline@${{ steps.channel.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Field | Value |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Version | \`${{ steps.channel.outputs.version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Channel | \`${{ steps.channel.outputs.channel }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| npm dist-tag | \`${{ steps.channel.outputs.dist_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Install | \`sf plugins install pypeline@${{ steps.channel.outputs.dist_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"

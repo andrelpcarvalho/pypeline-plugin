@@ -7,6 +7,8 @@ on:
   pull_request:
     branches:
       - main
+      - 'release/**'
+      - 'feature/**'
   workflow_dispatch:
 
 jobs:
@@ -38,3 +40,6 @@ jobs:
 
       - name: Unit tests
         run: yarn test:only
+
+      - name: Generate oclif manifest (validate commands)
+        run: npx oclif manifest

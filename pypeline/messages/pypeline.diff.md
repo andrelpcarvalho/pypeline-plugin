@@ -11,6 +11,3 @@ Calcula o diff entre o baseline.txt e o HEAD atual, identifica o metadata type d
 
 # flags.branch.summary
 Branch para referência (informativo — o diff é sempre baseline → HEAD).
-
-# flags.json.summary
-Retorna o resultado em formato JSON.

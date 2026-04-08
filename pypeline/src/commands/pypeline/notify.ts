@@ -135,7 +135,7 @@ export default class PypelineNotify extends SfCommand<PypelineNotifyResult> {
       }
       (config as Record<string, unknown>)['webhookUrl'] = flags['set-url'];
       writePypelineConfig(config as PypelineConfig);
-      this.log(`✔ Webhook URL salva em .pypeline.json`);
+      this.log('✔ Webhook URL salva em .pypeline.json');
     }
 
     // ── set-channel ───────────────────────────────────────────────────

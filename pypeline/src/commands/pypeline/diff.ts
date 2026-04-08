@@ -28,38 +28,42 @@ export type PypelineDiffResult = {
   totalDeleted: number;
 };
 
-// Infere o metadata type com base no path do arquivo.
+// Mapa de diretório → metadata type (lookup por includes)
+const DIR_TYPE_MAP: Array<[string, string]> = [
+  ['/lwc/', 'LightningComponentBundle'],
+  ['/aura/', 'AuraDefinitionBundle'],
+  ['/classes/', 'ApexClass'],
+  ['/triggers/', 'ApexTrigger'],
+  ['/pages/', 'ApexPage'],
+  ['/components/', 'ApexComponent'],
+  ['/objects/', 'CustomObject'],
+  ['/layouts/', 'Layout'],
+  ['/flows/', 'Flow'],
+  ['/profiles/', 'Profile'],
+  ['/permissionsets/', 'PermissionSet'],
+  ['/tabs/', 'CustomTab'],
+  ['/staticresources/', 'StaticResource'],
+  ['/labels/', 'CustomLabels'],
+  ['/flexipages/', 'FlexiPage'],
+  ['/experiences/', 'ExperienceBundle'],
+  ['/queues/', 'Queue'],
+  ['/email/', 'EmailTemplate'],
+  ['/reports/', 'Report'],
+  ['/dashboards/', 'Dashboard'],
+];
+
+const EXT_TYPE_MAP: Record<string, string> = {
+  '.cls': 'ApexClass',
+  '.trigger': 'ApexTrigger',
+  '.page': 'ApexPage',
+  '.component': 'ApexComponent',
+};
+
 function inferMetadataType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase();
-  const dir = filePath.toLowerCase();
-
-  if (dir.includes('/lwc/'))          return 'LightningComponentBundle';
-  if (dir.includes('/aura/'))         return 'AuraDefinitionBundle';
-  if (dir.includes('/classes/'))      return 'ApexClass';
-  if (dir.includes('/triggers/'))     return 'ApexTrigger';
-  if (dir.includes('/pages/'))        return 'ApexPage';
-  if (dir.includes('/components/'))   return 'ApexComponent';
-  if (dir.includes('/objects/'))      return 'CustomObject';
-  if (dir.includes('/layouts/'))      return 'Layout';
-  if (dir.includes('/flows/'))        return 'Flow';
-  if (dir.includes('/profiles/'))     return 'Profile';
-  if (dir.includes('/permissionsets/')) return 'PermissionSet';
-  if (dir.includes('/tabs/'))         return 'CustomTab';
-  if (dir.includes('/staticresources/')) return 'StaticResource';
-  if (dir.includes('/labels/'))       return 'CustomLabels';
-  if (dir.includes('/flexipages/'))   return 'FlexiPage';
-  if (dir.includes('/experiences/'))  return 'ExperienceBundle';
-  if (dir.includes('/queues/'))       return 'Queue';
-  if (dir.includes('/email/'))        return 'EmailTemplate';
-  if (dir.includes('/reports/'))      return 'Report';
-  if (dir.includes('/dashboards/'))   return 'Dashboard';
-
-  if (ext === '.cls')       return 'ApexClass';
-  if (ext === '.trigger')   return 'ApexTrigger';
-  if (ext === '.page')      return 'ApexPage';
-  if (ext === '.component') return 'ApexComponent';
-
-  return 'Unknown';
+  const lower = filePath.toLowerCase();
+  const dirMatch = DIR_TYPE_MAP.find(([dir]) => lower.includes(dir));
+  if (dirMatch) return dirMatch[1];
+  return EXT_TYPE_MAP[path.extname(filePath).toLowerCase()] ?? 'Unknown';
 }
 
 export default class PypelineDiff extends SfCommand<PypelineDiffResult> {
@@ -72,10 +76,6 @@ export default class PypelineDiff extends SfCommand<PypelineDiffResult> {
       char: 'b',
       summary: messages.getMessage('flags.branch.summary'),
       default: BRANCH,
-    }),
-    json: Flags.boolean({
-      summary: messages.getMessage('flags.json.summary'),
-      default: false,
     }),
   };
 
@@ -104,18 +104,6 @@ export default class PypelineDiff extends SfCommand<PypelineDiffResult> {
       ...diff.modified.map((f): FileEntry => ({ status: 'M', file: f, metadataType: inferMetadataType(f) })),
       ...diff.deleted.map((f): FileEntry => ({ status: 'D', file: f, metadataType: inferMetadataType(f) })),
     ];
-
-    if (flags['json']) {
-      // O SfCommand cuida do --json nativamente, mas respeitamos a flag custom também
-      return {
-        baseline,
-        head,
-        files,
-        totalAdded: diff.added.length,
-        totalModified: diff.modified.length,
-        totalDeleted: diff.deleted.length,
-      };
-    }
 
     this.log('');
     this.log('╔══════════════════════════════════════════════╗');

@@ -18,7 +18,7 @@ export type VersionResult = {
 function resolveNpm(): string {
   if (platform() !== 'win32') return 'npm';
   try {
-    const result = spawnSync('where', ['npm.cmd'], { encoding: 'utf8', shell: true });
+    const result = spawnSync('where', ['npm.cmd'], { encoding: 'utf8', shell: 'cmd.exe' });
     const first = result.stdout.split('\n')[0].trim();
     if (first) return first;
   } catch { /* fallback */ }
@@ -47,7 +47,6 @@ export default class Version extends SfCommand<VersionResult> {
         encoding: 'utf8',
         timeout: 8000,
         stdio: ['pipe', 'pipe', 'pipe'],
-        shell: true,
       });
       latest = raw.trim();
       updateAvailable = latest !== current;

@@ -61,9 +61,14 @@ export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
         const gen = spawnSync(
           'sf',
           ['project', 'generate', '--name', PROJECT_NAME, '--output-dir', PROJECT_DIR()],
-          { encoding: 'utf8', stdio: 'inherit' }
+          // stderr isolado via pipe — evita que o PowerShell interprete
+          // mensagens informativas do sf CLI como erro nativo
+          { encoding: 'utf8', stdio: ['inherit', 'inherit', 'pipe'] }
         );
-        if (gen.status !== 0) this.error('Falha ao gerar estrutura do projeto sf.');
+        if (gen.status !== 0) {
+          if (gen.stderr) this.warn(gen.stderr);
+          this.error('Falha ao gerar estrutura do projeto sf.');
+        }
       } else {
         this.log(`[INFO] Estrutura do projeto já existe em ${path.join(PROJECT_DIR(), PROJECT_NAME)}, pulando geração.`);
       }
@@ -109,12 +114,10 @@ export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
       }
     }
 
-    // Calcula o novo baseline (HEAD atual após git pull)
     const novoBaseline = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
     this.log(`[INFO] Novo baseline calculado: ${novoBaseline}`);
     this.log('[INFO] baseline.txt será atualizado pelo run após validate PRD com sucesso.');
 
-    // Persiste o novo baseline para o run.ts ler depois
     process.env['PYPELINE_NOVO_BASELINE'] = novoBaseline;
 
     const branchAtual = execSync('git branch --show-current', { encoding: 'utf8' }).trim();

@@ -1,5 +1,6 @@
 import { execSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { platform } from 'node:os';
 import { Messages } from '@salesforce/core';
 import { SfCommand } from '@salesforce/sf-plugins-core';
 
@@ -11,6 +12,9 @@ export type VersionResult = {
   latest: string | null;
   updateAvailable: boolean;
 };
+
+// No Windows o executável é npm.cmd — no Unix é npm
+const NPM = platform() === 'win32' ? 'npm.cmd' : 'npm';
 
 export default class Version extends SfCommand<VersionResult> {
   public static readonly summary = messages.getMessage('summary');
@@ -29,7 +33,7 @@ export default class Version extends SfCommand<VersionResult> {
     let updateAvailable = false;
 
     try {
-      const raw = execSync('npm view pypeline version', {
+      const raw = execSync(`${NPM} view pypeline version`, {
         encoding: 'utf8',
         timeout: 8000,
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -37,7 +41,7 @@ export default class Version extends SfCommand<VersionResult> {
       latest = raw.trim();
       updateAvailable = latest !== current;
     } catch {
-      // sem internet ou npm indisponível — apenas mostra a versão atual
+      // sem internet, npm indisponível ou proxy bloqueando — apenas mostra a versão atual
     }
 
     this.log(`pypeline/${current} (current)`);

@@ -7,7 +7,7 @@ import type { EsmockModule, DeployTrainingResult } from '../../../types.js';
 import { assertRejects, makeSpawnFake, makeWriteStream } from '../../../helpers.js';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
-const SRC        = resolve(currentDir, '../../../../../src').split(pathSep).join('/');
+const SRC        = resolve(currentDir, '../../../../src').split(pathSep).join('/');
 
 const FAKE_LOG    = '/fake/deploy_training.log';
 const FAKE_SOURCE = '/fake/source';

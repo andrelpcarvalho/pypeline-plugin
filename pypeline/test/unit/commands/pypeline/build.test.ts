@@ -26,15 +26,19 @@ const BASE_CONFIG = {
   gitDiffFiles:    () => FAKE_DIFF,
 };
 
-const BASE_FS = {
-  existsSync: () => true, readFileSync: () => FAKE_COMMIT_HASH + '\n',
-  writeFileSync: sinon.spy(), mkdirSync: sinon.spy(), rmSync: sinon.spy(),
-  copyFileSync: sinon.spy(), cpSync: sinon.spy(), unlinkSync: sinon.spy(),
-};
+// existsSync retorna true para tudo exceto o sfdxJson — simula projeto já gerado
+function makeFs(sfdxJsonExists = true): Record<string, unknown> {
+  return {
+    existsSync:   (p: string) => String(p).includes('sfdx-project.json') ? sfdxJsonExists : true,
+    readFileSync:  () => FAKE_COMMIT_HASH + '\n',
+    writeFileSync: sinon.spy(), mkdirSync: sinon.spy(), rmSync: sinon.spy(),
+    copyFileSync:  sinon.spy(), cpSync: sinon.spy(), unlinkSync: sinon.spy(),
+  };
+}
 
-async function loadBuild(opts: { spawnSyncStatus?: number; fileExists?: boolean } = {}): Promise<EsmockModule<BuildResult>> {
+async function loadBuild(opts: { spawnSyncStatus?: number; fileExists?: boolean; sfdxJsonExists?: boolean } = {}): Promise<EsmockModule<BuildResult>> {
   const raw: unknown = await esmock(`${SRC}/commands/pypeline/build.js`, {
-    'node:fs':           BASE_FS,
+    'node:fs':            makeFs(opts.sfdxJsonExists ?? true),
     'node:child_process': { execSync: makeExecSyncFake(), spawnSync: makeSpawnSyncFake(opts.spawnSyncStatus ?? 0) },
     [`${SRC}/config.js`]:    { ...BASE_CONFIG, fileExists: () => opts.fileExists ?? true },
     [`${SRC}/fileUtils.js`]: { copyFile: sinon.spy() },
@@ -61,7 +65,7 @@ describe('pypeline build', () => {
   it('com --dry-run não deve chamar copyFile', async () => {
     const copyFileSpy = sinon.spy();
     const raw: unknown = await esmock(`${SRC}/commands/pypeline/build.js`, {
-      'node:fs':           BASE_FS,
+      'node:fs':            makeFs(true),
       'node:child_process': { execSync: makeExecSyncFake(), spawnSync: makeSpawnSyncFake(0) },
       [`${SRC}/config.js`]:    { ...BASE_CONFIG, fileExists: () => true,
         gitDiffFiles: () => ({ added: [], modified: ['file.cls'], deleted: [], notDeleted: ['file.cls'] }) },
@@ -78,7 +82,15 @@ describe('pypeline build', () => {
   });
 
   it('deve lançar erro se sf project generate falhar', async () => {
-    const { default: Cmd } = await loadBuild({ spawnSyncStatus: 1 });
+    // sfdxJson não existe → entra no generate → spawnSync retorna status 1 → erro
+    const { default: Cmd } = await loadBuild({ spawnSyncStatus: 1, sfdxJsonExists: false });
     await assertRejects(Cmd.run([]), /Falha ao gerar estrutura/);
+  });
+
+  it('deve pular o generate se a estrutura já existir', async () => {
+    // sfdxJson existe → pula o generate → spawnSyncStatus irrelevante
+    const { default: Cmd } = await loadBuild({ sfdxJsonExists: true });
+    const result = await Cmd.run([]);
+    expect(result.commitHash).to.equal(FAKE_COMMIT_HASH);
   });
 });

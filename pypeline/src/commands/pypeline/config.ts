@@ -76,7 +76,7 @@ export default class PypelineConfigCmd extends SfCommand<PypelineConfigResult> {
     const { flags } = await this.parse(PypelineConfigCmd);
 
     const configFile = PYPELINE_CONFIG_FILE();
-    let config = readExtendedConfig();
+    const config = readExtendedConfig();
 
     // ── LIST (default quando nenhuma flag) ─────────────────────────────
     if (flags['list'] || (!flags['get'] && !flags['set'] && !flags['unset'])) {

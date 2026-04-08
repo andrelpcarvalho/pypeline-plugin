@@ -1,20 +1,6 @@
-import { TestContext } from '@salesforce/core/testSetup';
 import { expect } from 'chai';
-import { stubSfCommandUx } from '@salesforce/sf-plugins-core';
-import PypelineHistory from '../../../../src/commands/pypeline/history.js';
 
 describe('pypeline history', () => {
-  const $$ = new TestContext();
-  let sfCommandStubs: ReturnType<typeof stubSfCommandUx>;
-
-  beforeEach(() => {
-    sfCommandStubs = stubSfCommandUx($$.SANDBOX);
-  });
-
-  afterEach(() => {
-    $$.restore();
-  });
-
   it('should have correct HistoryEntry structure', () => {
     const entry = {
       timestamp: '2026-04-08T12:00:00.000Z',
@@ -25,7 +11,7 @@ describe('pypeline history', () => {
       jobId: '0Af000000000001AAA',
       branch: 'main',
       filesDeployed: 15,
-      duration: 120000,
+      duration: 120_000,
       targetOrg: 'devops',
     };
     expect(entry.action).to.be.oneOf(['run', 'quickdeploy', 'training', 'rollback']);
@@ -64,14 +50,9 @@ describe('pypeline history', () => {
 
   it('should respect FIFO limit of 200', () => {
     const entries = Array.from({ length: 250 }, (_, i) => ({
-      timestamp: new Date(Date.now() + i * 1000).toISOString(),
-      action: 'run' as const,
-      success: true,
-      baselineFrom: `from${i}`,
-      baselineTo: `to${i}`,
+      baselineFrom: `from${String(i)}`,
     }));
 
-    // Simula o truncamento
     const trimmed = entries.length > 200 ? entries.slice(-200) : entries;
     expect(trimmed).to.have.lengthOf(200);
     expect(trimmed[0].baselineFrom).to.equal('from50');

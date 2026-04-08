@@ -29,6 +29,9 @@ lista_arquivos_naodeletados.txt
 prd_job_id.txt
 deploy_prd_output.log
 deploy_training_output.log
+quick_deploy_prd_output.log
+.pypeline-history.json
+commitlist.txt
 `;
 
 const PYPELINE_ENTRIES = [
@@ -42,6 +45,9 @@ const PYPELINE_ENTRIES = [
   'prd_job_id.txt',
   'deploy_prd_output.log',
   'deploy_training_output.log',
+  'quick_deploy_prd_output.log',
+  '.pypeline-history.json',
+  'commitlist.txt',
 ];
 
 const DEFAULT_ORGS = ['devops', 'treino'];

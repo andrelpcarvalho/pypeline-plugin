@@ -7,14 +7,15 @@ import type { EsmockModule, ValidatePrdResult } from '../../../types.js';
 import { FAKE_JOB_ID, assertRejects, makeSpawnFake, makeWriteStream } from '../../../helpers.js';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
-const SRC        = resolve(currentDir, '../../../../../src').split(pathSep).join('/');
+const SRC        = resolve(currentDir, '../../../../src').split(pathSep).join('/');
 
 const FAKE_LOG      = '/fake/deploy_prd.log';
 const FAKE_SOURCE   = '/fake/source';
 const FAKE_JOB_FILE = '/fake/prd_job_id.txt';
 const BASE_CONFIG   = { LOG_PRD: () => FAKE_LOG, SOURCE_DIR: () => FAKE_SOURCE,
   JOB_ID_FILE: () => FAKE_JOB_FILE, unlinkIfExists: sinon.spy(), writeFile: sinon.spy() };
-const BASE_FS       = { createWriteStream: makeWriteStream, unlinkSync: sinon.spy(), writeFileSync: sinon.spy() };
+const BASE_FS       = { createWriteStream: makeWriteStream, unlinkSync: sinon.spy(), writeFileSync: sinon.spy(),
+  readFileSync: () => '', existsSync: () => true };
 
 async function loadPrd(lines: string[], exitCode = 0): Promise<EsmockModule<ValidatePrdResult>> {
   const raw: unknown = await esmock(`${SRC}/commands/pypeline/validate-prd.js`, {

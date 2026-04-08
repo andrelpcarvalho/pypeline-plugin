@@ -19,10 +19,11 @@ type SpawnExitCodes = { build?: number; package?: number; training?: number; val
 function makeSpawnStub(codes: Required<SpawnExitCodes>): (_bin: string, args: readonly string[]) => unknown {
   return (_bin: string, args: readonly string[]) => {
     let code = 0;
-    if (args.includes('build'))    code = codes.build;
-    if (args.includes('package'))  code = codes.package;
-    if (args.includes('training')) code = codes.training;
-    if (args.includes('validate')) code = codes.validate;
+    if (args.includes('build'))          code = codes.build;
+    if (args.includes('package'))        code = codes.package;
+    if (args.includes('training'))       code = codes.training;
+    // validate-prd é passado como argumento único — detectar via includes
+    if (args.includes('validate-prd'))   code = codes.validate;
     return {
       stdout: { on: (): void => {} }, stderr: { on: (): void => {} },
       on: (e: string, cb: (c: number) => void): void => { if (e === 'close') setTimeout(() => cb(code), 0); },

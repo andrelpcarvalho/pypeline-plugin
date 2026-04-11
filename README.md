@@ -1,329 +1,269 @@
 # pypeline
 
-> DevOps pipeline for Salesforce, packaged as a native `sf` CLI plugin.
+Salesforce CI/CD pipeline plugin for the sf CLI. Automates build, validation, deployment, and rollback of Salesforce metadata using git diff and baseline tracking.
 
-[![Version](https://img.shields.io/npm/v/pypeline.svg)](https://npmjs.org/package/pypeline)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/andrelpcarvalho/pypeline-plugin/blob/main/LICENSE)
-[![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)](#)
-
-Automates the full Salesforce deployment cycle — git diff, package generation, PRD validation, and quick deploy — as a first-class `sf` CLI plugin. No Python scripts required.
-
----
-
-## What it does
-
-`pypeline` orchestrates the four stages of a Salesforce release in a single command:
-
-```
-git diff  →  package.xml  →  validate PRD  →  quick deploy
-```
-
-Each stage can also be run independently. If any stage fails, the `baseline.txt` is automatically rolled back.
-
----
-
-## Requirements
-
-- **Node.js** ≥ 18
-- **Salesforce CLI** (`sf`) ≥ 2.x
-- **Git** available on PATH
+## Install
 
 ```bash
-node --version   # >= 18
-sf --version     # >= 2
-git --version
-```
-
----
-
-## Installation
-
-### From npm (recommended)
-
-```bash
+# Stable
 sf plugins install pypeline
+
+# Pre-release channels
+sf plugins install pypeline@rc
+sf plugins install pypeline@alpha
+sf plugins install pypeline@beta
 ```
 
-### Local development
+## Quick Start
 
 ```bash
-git clone https://github.com/andrelpcarvalho/pypeline-plugin.git
-cd pypeline-plugin/pypeline
-yarn install
-yarn build
-sf plugins link .
-```
+# 1. Initialize workspace
+sf pypeline init
 
-To update after code changes:
-
-```bash
-yarn build        # recompiles — the link picks up changes automatically
-```
-
----
-
-## Quick start
-
-```bash
-# 1. Authenticate your orgs
-sf org login web --alias devops   # production
-sf org login web --alias treino   # training
-
-# 2. Set the baseline commit
-git rev-parse HEAD > baseline.txt
-
-# 3. Run the full pipeline
+# 2. Run the full pipeline (build → package → validate → ready for deploy)
 sf pypeline run
 
-# 4. Quick deploy to production (after pipeline succeeds)
+# 3. Deploy to production
 sf pypeline quickdeploy
 ```
 
----
-
 ## Commands
+
+### Core Pipeline
 
 | Command | Description |
 |---------|-------------|
-| [`sf pypeline init`](#sf-pypeline-init) | Initialize workspace — create baseline.txt, update .gitignore, verify orgs |
-| [`sf pypeline run`](#sf-pypeline-run) | Full pipeline — build → package → validate → (optional) training |
-| [`sf pypeline build`](#sf-pypeline-build) | Git diff → copy changed files to build dir |
-| [`sf pypeline package`](#sf-pypeline-package) | Generate `package.xml` from build dir |
-| [`sf pypeline deploy training`](#sf-pypeline-deploy-training) | Deploy to training org with `RunLocalTests` |
-| [`sf pypeline validate prd`](#sf-pypeline-validate-prd) | Validate deploy in production (no commit) |
-| [`sf pypeline quickdeploy`](#sf-pypeline-quickdeploy) | Quick deploy using saved Job ID |
-| [`sf pypeline version`](#sf-pypeline-version) | Show installed version and check for updates |
+| `sf pypeline init` | Interactive setup: branch, baseline, .gitignore, org auth |
+| `sf pypeline build` | Git diff from baseline, copies changed files to build dir |
+| `sf pypeline package` | Generates package.xml from the build dir |
+| `sf pypeline run` | Full pipeline: build → package → validate-prd (with rollback) |
+| `sf pypeline validate-prd` | Validates deploy against production, saves Job ID |
+| `sf pypeline training` | Deploys to training org with RunLocalTests |
+| `sf pypeline quickdeploy` | Quick deploy to production using saved Job ID |
+| `sf pypeline version` | Shows installed version and checks for updates |
+
+### Observability
+
+| Command | Description |
+|---------|-------------|
+| `sf pypeline status` | Workspace dashboard: baseline, pending changes, job ID, orgs |
+| `sf pypeline diff` | Preview files grouped by metadata type before build |
+| `sf pypeline logs` | Formatted log viewer with level filter and tail |
+| `sf pypeline doctor` | 9-point health check with fix suggestions |
+| `sf pypeline history` | Deploy history with filters (action, failures, limit) |
+
+### Configuration
+
+| Command | Description |
+|---------|-------------|
+| `sf pypeline config` | Manage .pypeline.json settings (get/set/unset) |
+| `sf pypeline config --set prdOrg --value producao` | Set production org alias |
+| `sf pypeline config --set ci --value true` | Enable CI mode (no prompts) |
+| `sf pypeline notify` | Configure webhook notifications (Slack/Teams) |
+
+### GMUD Management (alpha)
+
+| Command | Description |
+|---------|-------------|
+| `sf pypeline cherry --list` | List GMUDs (via git tags) since baseline |
+| `sf pypeline cherry --exclude GMUD6789` | Build excluding a specific GMUD |
+| `sf pypeline cherry --include GMUD123` | Build with only specific GMUDs |
+| `sf pypeline cherry-rollback --gmud GMUD6789` | Rollback a GMUD: restore modified, destroy added |
+
+### Rollback
+
+| Command | Description |
+|---------|-------------|
+| `sf pypeline rollback` | Revert baseline 1 step back |
+| `sf pypeline rollback --steps 3` | Revert baseline 3 steps back |
+| `sf pypeline rollback --target-hash abc123` | Revert baseline to specific commit |
 
 ---
 
-### `sf pypeline init`
+## Pipeline Flow
 
-Initializes the workspace interactively. Run this once after setting up a new project.
-
-```bash
-sf pypeline init
+```
+sf pypeline init          (one-time setup)
+       │
+sf pypeline run           (orchestrates everything below)
+       │
+       ├── 1. build       (git diff baseline..HEAD → copy to build_deploy/)
+       ├── 2. package     (sf project generate manifest)
+       ├── 3. training    (optional, --training flag, runs in parallel)
+       └── 4. validate-prd (validates against prod, saves Job ID)
+       │
+sf pypeline quickdeploy   (deploys using saved Job ID)
 ```
 
-- Creates `baseline.txt` with the current HEAD commit (if not present)
-- Adds pypeline entries to `.gitignore` (if missing)
-- Checks that the default orgs (`devops` and `treino`) are authenticated
+On failure at any step, `run` automatically rolls back baseline.txt.
 
 ---
 
-### `sf pypeline run`
+## GMUD Workflow
 
-Runs all four stages in sequence. Training deploy runs in parallel with PRD validation.
+For teams using GMUDs (change management) with rebase-and-merge:
 
-```bash
-sf pypeline run [--branch <branch>] [--training] [--dry-run]
-               [--prd-org <alias>] [--training-org <alias>]
-```
+### Tagging GMUDs
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--branch, -b` | from `config.ts` | Git branch for checkout |
-| `--training` | `false` | Also run deploy to training org |
-| `--dry-run` | `false` | Build without copying files |
-| `--prd-org` | `devops` | Production org alias |
-| `--training-org` | `treino` | Training org alias |
-
----
-
-### `sf pypeline build`
-
-Calculates the git diff since `baseline.txt` and copies changed files to the build directory.
+After a PR is merged into the release branch, tag the last commit:
 
 ```bash
-sf pypeline build [--branch <branch>] [--dry-run]
+# GMUD with 1 commit
+git tag GMUD12345
+git push origin GMUD12345
+
+# GMUD with multiple commits (annotated tag with count)
+git tag -a GMUD12345 -m "3"
+git push origin GMUD12345
 ```
 
-Output files written to your Salesforce project root:
+The number in the message tells cherry how many commits belong to this GMUD.
 
-```
-build_deploy/                        ← files staged for deploy
-lista_arquivos_adicionados.txt
-lista_arquivos_modificados.txt
-lista_arquivos_deletados.txt
-lista_arquivos_naodeletados.txt
-```
-
----
-
-### `sf pypeline package`
-
-Generates `package.xml` from the build directory using `sf project generate manifest`.
+### Selective Build
 
 ```bash
+# List all GMUDs since last deploy
+sf pypeline cherry --list
+
+# Build everything except GMUD6789
+sf pypeline cherry --exclude GMUD6789
+
+# Build only specific GMUDs
+sf pypeline cherry --include GMUD12345 --include GMUDabcd
+
+# Preview without building
+sf pypeline cherry --exclude GMUD6789 --dry-run
+
+# After cherry, continue normally:
 sf pypeline package
+sf pypeline validate-prd
+sf pypeline quickdeploy
 ```
 
----
+### GMUD Rollback
 
-### `sf pypeline deploy training`
-
-Deploys to the training org with `RunLocalTests`. Output is saved to `deploy_training_output.log`.
+Reverts a specific GMUD: restores modified files to pre-GMUD version, destroys added files.
 
 ```bash
-sf pypeline deploy training [--target-org <alias>] [--wait <minutes>]
+# Preview
+sf pypeline cherry-rollback --gmud GMUD6789 --dry-run
+
+# Generate rollback build
+sf pypeline cherry-rollback --gmud GMUD6789
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--target-org, -o` | `treino` | Training org alias |
-| `--wait, -w` | `240` | Minutes to wait for result |
+Generates a single `rollback_deploy/` folder:
 
----
+```
+rollback_deploy/
+├── package.xml                ← restored files manifest
+├── destructiveChanges.xml     ← files to remove from org
+└── force-app/main/default/    ← pre-GMUD file versions
+```
 
-### `sf pypeline validate prd`
-
-Validates the deploy in production without committing it. Saves the Job ID to `prd_job_id.txt`. Output is saved to `deploy_prd_output.log`.
+Deploy with one command:
 
 ```bash
-sf pypeline validate prd [--target-org <alias>] [--wait <minutes>]
+sf project deploy start \
+  --manifest rollback_deploy/package.xml \
+  --post-destructive-changes rollback_deploy/destructiveChanges.xml \
+  --target-org devops -w 240 --verbose \
+  --test-level RunLocalTests
 ```
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--target-org, -o` | `devops` | Production org alias |
-| `--wait, -w` | `240` | Minutes to wait |
+### Custom Prefix
 
----
-
-### `sf pypeline quickdeploy`
-
-Executes the quick deploy in production using the Job ID saved by `validate prd`. The Job ID expires **10 hours** after validation. The file is removed after a successful deploy to prevent accidental reuse.
+If your team uses a different naming convention (e.g., CR, CHG):
 
 ```bash
-sf pypeline quickdeploy [--job-id <id>] [--no-prompt] [--target-org <alias>]
+sf pypeline cherry --list --prefix CR
+sf pypeline cherry-rollback --gmud CR001
 ```
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--job-id, -j` | reads from file | Override the saved Job ID |
-| `--no-prompt` | `false` | Skip interactive confirmation (for CI/CD) |
-| `--target-org, -o` | `devops` | Production org alias |
-| `--wait, -w` | `240` | Minutes to wait |
-
----
-
-### `sf pypeline version`
-
-Displays the installed version of the plugin and warns if a newer version is available on npm.
-
-```bash
-sf pypeline version
-```
-
-Example output:
-
-```
-pypeline/1.1.2 (current)
-
- ›   Warning: pypeline update available from 1.1.2 to 1.2.0.
- ›   Run sf plugins update pypeline to update.
-```
-
----
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [Plugin reference](pypeline/README.md) | All commands, flags, test setup and project structure |
-| [Workspace setup guide](pypeline/WORKSPACE_SETUP.md) | How to install and run the pipeline from scratch on a new machine |
 
 ---
 
 ## Configuration
 
-The plugin resolves all paths relative to `process.cwd()`. Two files are required in your **Salesforce project root** before the first run:
-
-**`baseline.txt`** — the git commit hash used as the diff baseline:
+Settings are stored in `.pypeline.json` at the project root.
 
 ```bash
-git rev-parse HEAD > baseline.txt
+# View all settings
+sf pypeline config
+
+# Available keys
+sf pypeline config --set branch --value main
+sf pypeline config --set prdOrg --value producao
+sf pypeline config --set trainingOrg --value homolog
+sf pypeline config --set testLevel --value RunLocalTests
+sf pypeline config --set waitMinutes --value 120
+sf pypeline config --set ci --value true
+
+# Remove a setting (reverts to default)
+sf pypeline config --unset prdOrg
 ```
 
-**Org aliases** — authenticate the orgs before running:
+### Webhook Notifications
 
 ```bash
-sf org login web --alias devops   # production (PRD)
-sf org login web --alias treino   # training
+# Configure Slack webhook
+sf pypeline notify --set-url https://hooks.slack.com/services/T00/B00/xxx
+sf pypeline notify --set-channel "#deploys"
+sf pypeline notify --test
+sf pypeline notify --remove
 ```
 
 ---
 
-## Development
+## Diagnostics
 
 ```bash
-# Install dependencies
-yarn install
+# Full workspace health check
+sf pypeline doctor
 
-# Compile TypeScript
-yarn build
-
-# Run unit tests (49 tests, no org required)
-yarn test:only
-
-# Run with coverage report
-yarn test:coverage
-
-# Lint + type-check + unit tests
-yarn test
-
-# Link to local sf CLI
-sf plugins link .
+# Checks: git repo, git status, sf CLI, Node.js, baseline.txt,
+# .pypeline.json, sfdx-project.json, .gitignore, org auth
 ```
-
-### Project structure
-
-```
-pypeline/
-├── src/
-│   ├── config.ts                 ← paths, constants, git/fs utilities
-│   ├── fileUtils.ts              ← Salesforce file copy logic
-│   └── commands/pypeline/
-│       ├── run.ts
-│       ├── build.ts
-│       ├── package.ts
-│       ├── quickdeploy.ts
-│       ├── version.ts
-│       ├── deploy/training.ts
-│       └── validate/prd.ts
-├── messages/                     ← oclif i18n message files
-├── test/
-│   ├── helpers.ts
-│   ├── unit/
-│   └── nuts/
-└── lib/                          ← compiled output (do not edit)
-```
-
-### Adding tests
-
-Unit tests live in `test/unit/` and use [mocha](https://mochajs.org/) + [esmock](https://github.com/iambumblehead/esmock) for ESM-compatible mocking. No org is required.
 
 ```bash
-yarn test:only
+# View deploy logs with filters
+sf pypeline logs                          # PRD log, all levels
+sf pypeline logs --target training        # Training log
+sf pypeline logs --level error            # Errors only
+sf pypeline logs --target prd --tail 50   # Last 50 lines
+```
+
+```bash
+# Deploy history
+sf pypeline history                       # Last 20 entries
+sf pypeline history --only-failures       # Failed deploys only
+sf pypeline history --action quickdeploy  # Filter by action
+sf pypeline history --clear               # Clear history
 ```
 
 ---
 
-## Troubleshooting
+## Release Channels
 
-**`baseline.txt not found`**
-Run `git rev-parse HEAD > baseline.txt` in your workspace directory.
+| Channel | Tag Pattern | Install | Stability |
+|---------|-------------|---------|-----------|
+| stable | `v1.4.0` | `sf plugins install pypeline` | Production ready |
+| rc | `v1.4.0-rc.1` | `sf plugins install pypeline@rc` | Release candidate |
+| alpha | `v1.4.0-alpha.1` | `sf plugins install pypeline@alpha` | Feature complete, testing |
+| beta | `v1.4.0-beta.1` | `sf plugins install pypeline@beta` | Experimental |
 
-**Job ID not found after validate**
-The regex `0Af[0-9A-Za-z]{15}` extracts the Job ID from sf CLI output. If a future sf CLI version changes the format, update the pattern in `src/commands/pypeline/validate/prd.ts`.
+```bash
+# Check installed version
+sf pypeline version
 
-**Job ID expired**
-Quick deploy Job IDs expire 10 hours after validation. Re-run `sf pypeline validate prd` to generate a new one.
-
-**Plugin not updating after code changes**
-Run `yarn build` — the `sf plugins link` symlink points to the `lib/` directory, which is replaced on every build.
+# Check available versions on npm
+npm dist-tag ls pypeline
+```
 
 ---
 
-## License
+## Requirements
 
-MIT © [André Carvalho](https://github.com/andrelpcarvalho)
+- Node.js >= 18
+- Salesforce CLI (sf)
+- Git repository with Salesforce project (sfdx-project.json)
+- Authenticated orgs (`sf org login web --alias devops`)

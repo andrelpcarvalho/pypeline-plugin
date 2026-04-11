@@ -32,6 +32,11 @@ deploy_training_output.log
 quick_deploy_prd_output.log
 .pypeline-history.json
 commitlist.txt
+cherry_included.txt
+cherry_excluded.txt
+cherry_gmuds.json
+cherry_rollback.json
+rollback_deploy/
 `;
 
 const PYPELINE_ENTRIES = [
@@ -48,6 +53,11 @@ const PYPELINE_ENTRIES = [
   'quick_deploy_prd_output.log',
   '.pypeline-history.json',
   'commitlist.txt',
+  'cherry_included.txt',
+  'cherry_excluded.txt',
+  'cherry_gmuds.json',
+  'cherry_rollback.json',
+  'rollback_deploy/',
 ];
 
 const DEFAULT_ORGS = ['devops', 'treino'];

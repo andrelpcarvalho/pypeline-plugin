@@ -107,7 +107,7 @@ export default class PypelineValidatePrd extends SfCommand<PypelineValidatePrdRe
     }
 
     if (jobId !== null) {
-      const safeJobId = jobId;
+      const safeJobId = jobId as string;
       writeFile(jobIdFile, safeJobId + '\n');
       this.log(`[INFO] Job ID salvo em prd_job_id.txt: ${safeJobId}`);
     } else {

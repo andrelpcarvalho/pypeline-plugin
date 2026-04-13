@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';
 import { SfCommand, Flags } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
@@ -35,40 +35,42 @@ export default class PypelineTraining extends SfCommand<PypelineTrainingResult> 
     const sourceDir = SOURCE_DIR();
 
     unlinkIfExists(logPath);
+
     this.log('Iniciando deploy em Training...');
 
     const cmd = [
       'project', 'deploy', 'start',
       '--source-dir', sourceDir,
-      '--target-org',  flags['target-org'] ?? 'treino',
-      '--test-level',  'RunLocalTests',
-      '-w',            String(flags['wait'] ?? 240),
+      '--target-org', flags['target-org'] ?? 'treino',
+      '--test-level', 'RunLocalTests',
+      '-w', String(flags['wait'] ?? 240),
       '--ignore-conflicts',
       '--verbose',
     ];
 
     const exitCode = await new Promise<number>((resolve) => {
-      const proc: ChildProcess = spawn('sf', cmd, { stdio: ['inherit', 'pipe', 'pipe'] });
-      const log  = fs.createWriteStream(logPath, { flags: 'a' });
+      const proc = spawn('sf', cmd, { stdio: ['inherit', 'pipe', 'pipe'] });
+      const log = fs.createWriteStream(logPath, { flags: 'a' });
 
-      if (proc.stdout) proc.stdout.on('data', (chunk: Buffer) => {
-        const text = chunk.toString();
-        process.stdout.write(text);
-        log.write(text);
-      });
-      if (proc.stderr) proc.stderr.on('data', (chunk: Buffer) => {
-        const text = chunk.toString();
-        process.stderr.write(text);
-        log.write(text);
-      });
-      proc.on('close', (code: number | null) => { log.close(); resolve(code ?? 1); });
+      if (proc.stdout)
+        proc.stdout.on('data', (chunk: Buffer) => {
+          log.write(chunk);
+        });
+
+      if (proc.stderr)
+        proc.stderr.on('data', (chunk: Buffer) => {
+          log.write(chunk);
+        });
+
+      proc.on('close', (code) => { log.close(); resolve(code ?? 1); });
     });
 
     if (exitCode !== 0) {
+      this.log(`[TRAINING] ✗ Deploy falhou (exit code ${exitCode}). Detalhes em ${logPath}`);
       this.error(`Deploy em Training falhou com exit code ${exitCode}.`);
     }
 
-    this.log('Deploy em Training concluído com sucesso.');
+    this.log(`[TRAINING] ✓ Deploy concluído com sucesso. Log: ${logPath}`);
     return { success: true, logPath };
   }
 }

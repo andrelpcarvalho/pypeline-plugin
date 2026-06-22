@@ -21,7 +21,8 @@ const GITIGNORE_BLOCK = `
 # ── pypeline — arquivos gerados pelo pipeline ────────────────────────────────
 .pypeline.json
 baseline.txt
-build_deploy/
+.pypeline-novo-baseline.tmp
+**/build_deploy/
 lista_arquivos_adicionados.txt
 lista_arquivos_modificados.txt
 lista_arquivos_deletados.txt
@@ -42,7 +43,8 @@ rollback_deploy/
 const PYPELINE_ENTRIES = [
   '.pypeline.json',
   'baseline.txt',
-  'build_deploy/',
+  '.pypeline-novo-baseline.tmp',
+  '**/build_deploy/',
   'lista_arquivos_adicionados.txt',
   'lista_arquivos_modificados.txt',
   'lista_arquivos_deletados.txt',
@@ -72,6 +74,8 @@ export default class Init extends SfCommand<InitResult> {
     this.log('\n── pypeline init ───────────────────────────────────────────\n');
 
     const branchConfigured = await this.setupBranch(cwd);
+    this.log('');
+    await this.setupWorkspace();
     this.log('');
     const baselineCreated = await this.setupBaseline(cwd);
     this.log('');
@@ -125,6 +129,37 @@ export default class Init extends SfCommand<InitResult> {
     } catch {
       return null;
     }
+  }
+
+  // ── Workspace ────────────────────────────────────────────────────────────
+  // Pasta-pai onde build_deploy é gerado. Default: raiz do projeto (cwd),
+  // igual ao comportamento anterior. Caminho relativo vira relativo ao cwd.
+
+  private async setupWorkspace(): Promise<string> {
+    const existingConfig = readPypelineConfig();
+    const current = existingConfig.workspace ?? '. (raiz do projeto)';
+    this.log(`Workspace de build atual: ${current}`);
+
+    const change = await this.confirm({
+      message: 'Deseja gerar o build_deploy dentro de uma subpasta (ex: workspace) em vez da raiz?',
+      defaultAnswer: false,
+    });
+
+    if (!change) {
+      this.log(`✔  Workspace mantido: ${current}`);
+      return existingConfig.workspace ?? '';
+    }
+
+    const workspace = await input({
+      message: 'Nome/caminho da subpasta de workspace (relativo à raiz do projeto):',
+      default: existingConfig.workspace ?? 'workspace',
+      validate: (v: string) => v.trim().length > 0 || 'O caminho não pode ser vazio.',
+    });
+
+    const trimmed = workspace.trim();
+    writePypelineConfig({ ...existingConfig, workspace: trimmed } as PypelineConfig);
+    this.log(`✔  Workspace salvo em .pypeline.json → ${trimmed}/build_deploy`);
+    return trimmed;
   }
 
   // ── Baseline ─────────────────────────────────────────────────────────────

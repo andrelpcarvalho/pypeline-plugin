@@ -7,6 +7,7 @@ import {
   BASELINE_FILE,
   BRANCH,
   BUILD_DIR,
+  NOVO_BASELINE_FILE,
   PROJECT_DIR,
   PROJECT_NAME,
   SCRIPT_DIR,
@@ -118,7 +119,11 @@ export default class PypelineBuild extends SfCommand<PypelineBuildResult> {
     this.log(`[INFO] Novo baseline calculado: ${novoBaseline}`);
     this.log('[INFO] baseline.txt será atualizado pelo run após validate PRD com sucesso.');
 
-    process.env['PYPELINE_NOVO_BASELINE'] = novoBaseline;
+    // NÃO usar process.env aqui: este comando roda como processo filho
+    // (spawn) quando chamado por `pypeline run`, então qualquer env var
+    // setada aqui morre junto com este processo e nunca chega ao pai.
+    // Por isso persistimos em arquivo, que sobrevive entre processos.
+    writeFile(NOVO_BASELINE_FILE(), novoBaseline);
 
     const branchAtual = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
     this.log(`Branches:\n* ${branchAtual}`);

@@ -7,9 +7,11 @@ import {
   JOB_ID_FILE,
   LOG_PRD,
   LOG_TRAINING,
+  NOVO_BASELINE_FILE,
   SCRIPT_DIR,
   fileExists,
   readFileTrimmed,
+  unlinkIfExists,
   writeFile,
 } from '../../config.js';
 
@@ -90,6 +92,9 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     this.log(`[INFO] Diretório de trabalho        : ${process.cwd()}`);
     this.log(`[INFO] Script dir                   : ${SCRIPT_DIR}`);
 
+    // Limpa resíduo de uma run anterior que tenha falhado antes da leitura.
+    unlinkIfExists(NOVO_BASELINE_FILE());
+
     const rollback = (etapa: string): never => {
       this.log('');
       this.log('╔══════════════════════════════════════════════╗');
@@ -111,7 +116,14 @@ export default class PypelineRun extends SfCommand<PypelineRunResult> {
     ];
     if ((await runSubcommand(buildArgs)) !== 0) rollback('pypeline build');
 
-    const novoBaseline = process.env['PYPELINE_NOVO_BASELINE'] ?? readFileTrimmed(baselineFile);
+    // O env var antigo (PYPELINE_NOVO_BASELINE) nunca funcionou aqui: o build
+    // acima roda como processo filho (spawn), e env var setada num filho não
+    // se propaga pro processo pai. build.ts agora grava o valor em arquivo.
+    const novoBaselineFile = NOVO_BASELINE_FILE();
+    const novoBaseline = fileExists(novoBaselineFile)
+      ? readFileTrimmed(novoBaselineFile)
+      : readFileTrimmed(baselineFile);
+    unlinkIfExists(novoBaselineFile);
     this.log(`[INFO] Novo baseline a ser gravado  : ${novoBaseline}`);
 
     // ── ETAPA 2: package.xml ─────────────────────────────────────────────

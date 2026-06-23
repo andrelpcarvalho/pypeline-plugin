@@ -22,6 +22,7 @@ export const PYPELINE_CONFIG_FILE = (): string => path.join(process.cwd(), '.pyp
 
 export type PypelineConfig = {
   branch?: string;
+  workspace?: string;
 };
 
 export function readPypelineConfig(): PypelineConfig {
@@ -45,13 +46,27 @@ export const PROJECT_NAME = 'build_deploy';
 // Branch: flag CLI > PYPELINE_BRANCH env var > .pypeline.json > 'main'
 export const BRANCH = process.env['PYPELINE_BRANCH'] ?? readPypelineConfig().branch ?? 'main';
 
-export const BUILD_DIR  = (): string => path.join(process.cwd(), PROJECT_NAME);
+// Workspace: pasta-pai onde o build_deploy é gerado.
+// Precedência: PYPELINE_WORKSPACE env var > .pypeline.json (workspace) > cwd (default, comportamento anterior preservado).
+// Aceita caminho relativo (resolvido a partir de process.cwd()) ou absoluto.
+export const WORKSPACE_DIR = (): string => {
+  const configured = process.env['PYPELINE_WORKSPACE'] ?? readPypelineConfig().workspace;
+  if (!configured) return process.cwd();
+  return path.isAbsolute(configured) ? configured : path.join(process.cwd(), configured);
+};
+
+export const BUILD_DIR  = (): string => path.join(WORKSPACE_DIR(), PROJECT_NAME);
 export const SOURCE_DIR = (): string => path.join(BUILD_DIR(), 'force-app', 'main', 'default');
 
 // ── Arquivos de estado ─────────────────────────────────────────────────────
 
 export const BASELINE_FILE = (): string => path.join(process.cwd(), 'baseline.txt');
 export const JOB_ID_FILE   = (): string => path.join(process.cwd(), 'prd_job_id.txt');
+
+// Arquivo temporário usado para passar o novo baseline de `pypeline build`
+// para `pypeline run` — ver nota em build.ts/run.ts sobre por que não dá
+// pra usar env var entre esses dois (são processos distintos via spawn).
+export const NOVO_BASELINE_FILE = (): string => path.join(process.cwd(), '.pypeline-novo-baseline.tmp');
 
 // ── Logs ───────────────────────────────────────────────────────────────────
 
